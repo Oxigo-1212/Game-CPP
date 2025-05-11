@@ -67,6 +67,9 @@ void Game::HandleEvents() {
             isRunning = false;
         } else if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE && event.type == SDL_KEYDOWN) {
             isRunning = false;
+        } else if (event.type == SDL_MOUSEMOTION) {
+            // Update player's aim direction
+            player->UpdateMousePosition(event.motion.x, event.motion.y);
         } else {
             player->HandleInput(event);
         }
