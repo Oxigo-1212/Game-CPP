@@ -1,9 +1,9 @@
 all: game
 
-game: main.o game.o player.o bullet.o
-	g++ -Isrc/include -o game main.o game.o player.o bullet.o -Lsrc/lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_image 
+game: main.o game.o player.o bullet.o ui.o
+	g++ -Isrc/include -o game main.o game.o player.o bullet.o ui.o -Lsrc/lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf
 
-game.o: src/game.cpp src/include/Game.h src/include/Player.h
+game.o: src/game.cpp src/include/Game.h src/include/Player.h src/include/UI.h
 	g++ -Isrc/include -c src/game.cpp -o game.o
 
 player.o: src/player.cpp src/include/Player.h
@@ -12,11 +12,14 @@ player.o: src/player.cpp src/include/Player.h
 bullet.o: src/bullet.cpp src/include/Bullet.h
 	g++ -Isrc/include -c src/bullet.cpp -o bullet.o
 
+ui.o: src/UI.cpp src/include/UI.h
+	g++ -Isrc/include -c src/UI.cpp -o ui.o
+
 main.o: src/main.cpp src/include/Game.h
 	g++ -Isrc/include -c src/main.cpp -o main.o
 
 clean:
-	-del /F /Q game.exe main.o game.o player.o bullet.o 2>nul || rm -f game main.o game.o player.o bullet.o
+	-del /F /Q game.exe main.o game.o player.o bullet.o ui.o 2>nul || rm -f game main.o game.o player.o bullet.o ui.o
 
 run:
 	./game

@@ -4,9 +4,12 @@
 #include <cmath>
 
 Player::Player(SDL_Renderer* renderer, float startX, float startY) 
-    : renderer(renderer), x(startX), y(startY), speed(200.0f), texture(nullptr),
-    currentFrame(0), frameCount(20), frameTimer(0), frameDuration(0.05f),
-    rotation(0.0f), mouseX(0), mouseY(0), shootTimer(0.0f) {
+    : renderer(renderer), x(startX), y(startY), speed(200.0f),
+    currentFrame(0), frameTimer(0), frameDuration(DEFAULT_FRAME_DURATION),
+    rotation(0.0f), mouseX(0), mouseY(0), shootTimer(0.0f), meleeTimer(0.0f),
+    isMeleeing(false), currentState(PlayerState::IDLE),
+    currentAmmo(MAX_AMMO), isReloading(false), reloadTimer(0.0f),
+    currentHealth(STARTING_HEALTH) {
     
     LoadTextures(renderer);
     
@@ -18,10 +21,18 @@ Player::Player(SDL_Renderer* renderer, float startX, float startY)
 
 Player::~Player() {
     // Clean up all textures
-    for (SDL_Texture* tex : idleAnimFrames) {
-        if (tex) SDL_DestroyTexture(tex);
-    }
-    idleAnimFrames.clear();
+    auto cleanupFrames = [](std::vector<SDL_Texture*>& frames) {
+        for (auto tex : frames) {
+            if (tex) SDL_DestroyTexture(tex);
+        }
+        frames.clear();
+    };
+
+    cleanupFrames(idleFrames);
+    cleanupFrames(moveFrames);
+    cleanupFrames(shootFrames);
+    cleanupFrames(reloadFrames);
+    cleanupFrames(meleeFrames);
 
     // Clean up bullets
     for (auto bullet : bullets) {
@@ -30,12 +41,15 @@ Player::~Player() {
     bullets.clear();
 }
 
-void Player::LoadTextures(SDL_Renderer* renderer) {
+void Player::LoadAnimationSet(SDL_Renderer* renderer, std::vector<SDL_Texture*>& frames, 
+                            const std::string& path, int frameCount) {
+    frames.clear();
+    
     for (int i = 0; i < frameCount; i++) {
-        std::string path = "assets/player/handgun/idle/survivor-idle_handgun_" + std::to_string(i) + ".png";
-        SDL_Surface* surface = IMG_Load(path.c_str());
+        std::string fullPath = path + std::to_string(i) + ".png";
+        SDL_Surface* surface = IMG_Load(fullPath.c_str());
         if (!surface) {
-            std::cerr << "Failed to load image " << path << ": " << IMG_GetError() << std::endl;
+            std::cerr << "Failed to load image " << fullPath << ": " << IMG_GetError() << std::endl;
             continue;
         }
 
@@ -46,10 +60,10 @@ void Player::LoadTextures(SDL_Renderer* renderer) {
             continue;
         }
 
-        idleAnimFrames.push_back(tex);
+        frames.push_back(tex);
         
-        // Set up source and destination rectangles using the first frame
-        if (i == 0) {
+        // Set up source and destination rectangles using the first frame of idle animation
+        if (path.find("idle") != std::string::npos && i == 0) {
             srcRect = {0, 0, surface->w, surface->h};
             destRect = {(int)x - surface->w/4, (int)y - surface->h/4, surface->w/2, surface->h/2}; // Scale down by 50%
         }
@@ -58,10 +72,63 @@ void Player::LoadTextures(SDL_Renderer* renderer) {
     }
 }
 
+void Player::LoadTextures(SDL_Renderer* renderer) {
+    // Load all animation sets
+    LoadAnimationSet(renderer, idleFrames, "assets/player/handgun/idle/survivor-idle_handgun_", IDLE_FRAME_COUNT);
+    LoadAnimationSet(renderer, moveFrames, "assets/player/handgun/move/survivor-move_handgun_", MOVE_FRAME_COUNT);
+    LoadAnimationSet(renderer, shootFrames, "assets/player/handgun/shoot/survivor-shoot_handgun_", SHOOT_FRAME_COUNT);
+    LoadAnimationSet(renderer, reloadFrames, "assets/player/handgun/reload/survivor-reload_handgun_", RELOAD_FRAME_COUNT);
+    LoadAnimationSet(renderer, meleeFrames, "assets/player/handgun/meleeattack/survivor-meleeattack_handgun_", MELEE_FRAME_COUNT);
+}
+
+std::vector<SDL_Texture*>& Player::GetCurrentAnimationFrames() {
+    switch (currentState) {
+        case PlayerState::MOVING: return moveFrames;
+        case PlayerState::SHOOTING: return shootFrames;
+        case PlayerState::RELOADING: return reloadFrames;
+        case PlayerState::MELEE: return meleeFrames;
+        case PlayerState::IDLE:
+        default: return idleFrames;
+    }
+}
+
+int Player::GetCurrentAnimationFrameCount() const {
+    switch (currentState) {
+        case PlayerState::MOVING: return MOVE_FRAME_COUNT;
+        case PlayerState::SHOOTING: return SHOOT_FRAME_COUNT;
+        case PlayerState::RELOADING: return RELOAD_FRAME_COUNT;
+        case PlayerState::MELEE: return MELEE_FRAME_COUNT;
+        case PlayerState::IDLE:
+        default: return IDLE_FRAME_COUNT;
+    }
+}
+
+void Player::UpdateAnimation(float deltaTime) {
+    frameTimer += deltaTime;
+    if (frameTimer >= frameDuration) {
+        frameTimer = 0;
+        currentFrame = (currentFrame + 1) % GetCurrentAnimationFrameCount();
+        
+        // If we complete a shooting/reloading/melee animation, return to idle
+        if (currentFrame == 0 && 
+            (currentState == PlayerState::SHOOTING || 
+             currentState == PlayerState::RELOADING || 
+             currentState == PlayerState::MELEE)) {
+            currentState = PlayerState::IDLE;
+        }
+    }
+}
+
 void Player::HandleInput(SDL_Event& event) {
     switch (event.type) {
         case SDL_KEYDOWN:
             keyStates[event.key.keysym.scancode] = true;
+            if (event.key.keysym.scancode == SDL_SCANCODE_R && !isReloading && currentAmmo < MAX_AMMO) {
+                isReloading = true;
+                reloadTimer = RELOAD_TIME;
+                currentState = PlayerState::RELOADING;
+                currentFrame = 0;
+            }
             break;
         case SDL_KEYUP:
             keyStates[event.key.keysym.scancode] = false;
@@ -69,11 +136,28 @@ void Player::HandleInput(SDL_Event& event) {
         case SDL_MOUSEMOTION:
             UpdateMousePosition(event.motion.x, event.motion.y);
             break;
-        case SDL_MOUSEBUTTONDOWN:            if (event.button.button == SDL_BUTTON_LEFT) {
-                // Only shoot if enough time has passed
-                if (shootTimer <= 0) {
-                    Shoot(this->renderer);  // Use the stored renderer
-                    shootTimer = PISTOL_FIRE_RATE;  // Reset the timer
+        case SDL_MOUSEBUTTONDOWN:
+            if (event.button.button == SDL_BUTTON_LEFT && !isReloading) {
+                // Only shoot if enough time has passed and we have ammo
+                if (shootTimer <= 0 && currentAmmo > 0) {
+                    Shoot(this->renderer);
+                    shootTimer = PISTOL_FIRE_RATE;
+                    currentAmmo--;
+                    
+                    // Auto-reload when empty
+                    if (currentAmmo == 0) {
+                        isReloading = true;
+                        reloadTimer = RELOAD_TIME;
+                        currentState = PlayerState::RELOADING;
+                        currentFrame = 0;
+                    }
+                }
+            }
+            else if (event.button.button == SDL_BUTTON_RIGHT && !isReloading) {
+                // Only melee if enough time has passed
+                if (meleeTimer <= 0 && !isMeleeing) {
+                    MeleeAttack();
+                    meleeTimer = MELEE_COOLDOWN;
                 }
             }
             break;
@@ -90,24 +174,53 @@ void Player::UpdateMousePosition(int x, int y) {
     rotation = atan2(dy, dx) * (180.0f / M_PI);
 }
 
-void Player::Update(float deltaTime) {
-    // Update shoot timer
+void Player::Update(float deltaTime) {    // Update timers
     if (shootTimer > 0) {
         shootTimer -= deltaTime;
     }
+    
+    if (meleeTimer > 0) {
+        meleeTimer -= deltaTime;
+    }
 
-    // Handle movement based on key states
-    if (keyStates[SDL_SCANCODE_W] || keyStates[SDL_SCANCODE_UP]) {
+    // Handle reload timer
+    if (isReloading) {
+        reloadTimer -= deltaTime;
+        if (reloadTimer <= 0) {
+            isReloading = false;
+            currentAmmo = MAX_AMMO;
+            currentState = PlayerState::IDLE;
+        }
+    }
+    
+    // Reset melee state when animation completes
+    if (isMeleeing && currentState != PlayerState::MELEE) {
+        isMeleeing = false;
+    }// Handle movement and set state (WASD only)
+    bool isMoving = false;
+    if (keyStates[SDL_SCANCODE_W]) {
         y -= speed * deltaTime;
+        isMoving = true;
     }
-    if (keyStates[SDL_SCANCODE_S] || keyStates[SDL_SCANCODE_DOWN]) {
+    if (keyStates[SDL_SCANCODE_S]) {
         y += speed * deltaTime;
+        isMoving = true;
     }
-    if (keyStates[SDL_SCANCODE_A] || keyStates[SDL_SCANCODE_LEFT]) {
+    if (keyStates[SDL_SCANCODE_A]) {
         x -= speed * deltaTime;
-    }
-    if (keyStates[SDL_SCANCODE_D] || keyStates[SDL_SCANCODE_RIGHT]) {
+        isMoving = true;
+    }    if (keyStates[SDL_SCANCODE_D]) {
         x += speed * deltaTime;
+        isMoving = true;
+    }
+
+    // Update state based on movement
+    if (isMoving && currentState == PlayerState::IDLE) {
+        currentState = PlayerState::MOVING;
+        currentFrame = 0;
+    } else if (!isMoving && currentState == PlayerState::MOVING) {
+        currentState = PlayerState::IDLE;
+        currentFrame = 0;
     }
 
     // Update destination rectangle position
@@ -121,18 +234,13 @@ void Player::Update(float deltaTime) {
     y = destRect.y + destRect.h/2;
 
     // Update animation
-    frameTimer += deltaTime;
-    if (frameTimer >= frameDuration) {
-        frameTimer = 0;
-        currentFrame = (currentFrame + 1) % frameCount;
-    }
+    UpdateAnimation(deltaTime);
 
     // Update bullets
     for (auto it = bullets.begin(); it != bullets.end();) {
         Bullet* bullet = *it;
         bullet->Update(deltaTime);
         
-        // Remove inactive bullets
         if (!bullet->IsActive()) {
             delete bullet;
             it = bullets.erase(it);
@@ -143,16 +251,30 @@ void Player::Update(float deltaTime) {
 }
 
 void Player::Shoot(SDL_Renderer* renderer) {
-    // Convert rotation to radians for trigonometry
+    currentState = PlayerState::SHOOTING;
+    currentFrame = 0;
+    frameTimer = 0;
+
+    // Calculate muzzle position and create bullet...
     float rotationRad = rotation * M_PI / 180.0f;
-    
-    // Calculate muzzle position
     float muzzleX = x + (PISTOL_MUZZLE_OFFSET_X * cos(rotationRad)) - (PISTOL_MUZZLE_OFFSET_Y * sin(rotationRad));
     float muzzleY = y + (PISTOL_MUZZLE_OFFSET_X * sin(rotationRad)) + (PISTOL_MUZZLE_OFFSET_Y * cos(rotationRad));
     
-    // Create new bullet
     Bullet* bullet = new Bullet(renderer, muzzleX, muzzleY, rotation);
     bullets.push_back(bullet);
+}
+
+void Player::MeleeAttack() {
+    // Switch to melee state and reset animation
+    currentState = PlayerState::MELEE;
+    currentFrame = 0;
+    frameTimer = 0;
+    isMeleeing = true;
+
+    // Load knife melee animation if not already loaded
+    if (meleeFrames.empty()) {
+        LoadAnimationSet(renderer, meleeFrames, "assets/player/knife/meleeattack/survivor-meleeattack_knife_", MELEE_FRAME_COUNT);
+    }
 }
 
 void Player::RenderAimingLine(SDL_Renderer* renderer) {
@@ -168,7 +290,7 @@ void Player::RenderAimingLine(SDL_Renderer* renderer) {
 void Player::RenderMuzzlePosition(SDL_Renderer* renderer) {
     // Convert rotation to radians for trigonometry
     float rotationRad = rotation * M_PI / 180.0f;
-      // Calculate muzzle position
+    // Calculate muzzle position
     float muzzleX = x + (PISTOL_MUZZLE_OFFSET_X * cos(rotationRad)) - (PISTOL_MUZZLE_OFFSET_Y * sin(rotationRad));
     float muzzleY = y + (PISTOL_MUZZLE_OFFSET_X * sin(rotationRad)) + (PISTOL_MUZZLE_OFFSET_Y * cos(rotationRad));
     
@@ -190,15 +312,23 @@ void Player::Render(SDL_Renderer* renderer) {
         bullet->Render(renderer);
     }
 
-    if (!idleAnimFrames.empty() && currentFrame < idleAnimFrames.size()) {
-        // Save the current renderer state
+    // Get the current animation frames
+    auto& currentFrames = GetCurrentAnimationFrames();
+    if (!currentFrames.empty() && currentFrame < currentFrames.size()) {
         SDL_Point center = {destRect.w / 2, destRect.h / 2};
-        SDL_RenderCopyEx(renderer, idleAnimFrames[currentFrame], &srcRect, &destRect, rotation, &center, SDL_FLIP_NONE);
+        SDL_RenderCopyEx(renderer, currentFrames[currentFrame], &srcRect, &destRect, 
+                        rotation, &center, SDL_FLIP_NONE);
         
-        // Draw the debug aiming line
+        // Debug visualization
         RenderAimingLine(renderer);
-        
-        // Draw the muzzle position
         RenderMuzzlePosition(renderer);
     }
+}
+
+void Player::TakeDamage(int amount) {
+    currentHealth = std::max(0, currentHealth - amount);
+}
+
+void Player::Heal(int amount) {
+    currentHealth = std::min(MAX_HEALTH, currentHealth + amount);
 }

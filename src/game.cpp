@@ -10,7 +10,8 @@ Game::Game() :
     FPS(60),
     FRAME_TIME(1000 / FPS),
     FIXED_TIME_STEP(1.0f / 60.0f),
-    player(nullptr) {
+    player(nullptr),
+    ui(nullptr) {
 }
 
 Game::~Game() {
@@ -55,6 +56,13 @@ bool Game::Initialize() {
     // Create player instance
     player = new Player(renderer);
 
+    // Create and initialize UI
+    ui = new UI(renderer);
+    if (!ui->Initialize()) {
+        std::cerr << "UI initialization failed" << std::endl;
+        return false;
+    }
+
     isRunning = true;
     previousTime = SDL_GetTicks();
     return true;
@@ -85,6 +93,9 @@ void Game::Render() {
     SDL_RenderClear(renderer);
 
     player->Render(renderer);
+    
+    // Render UI with player's current health and ammo
+    ui->Render(player->GetHealth(), player->GetMaxHealth(), player->GetAmmo(), player->GetMaxAmmo());
 
     SDL_RenderPresent(renderer);
 }
@@ -123,17 +134,22 @@ void Game::Cleanup() {
         delete player;
         player = nullptr;
     }
-    
+
+    if (ui) {
+        delete ui;
+        ui = nullptr;
+    }
+
     if (renderer) {
         SDL_DestroyRenderer(renderer);
         renderer = nullptr;
     }
-    
+
     if (window) {
         SDL_DestroyWindow(window);
         window = nullptr;
     }
-    
+
     IMG_Quit();
     SDL_Quit();
 }

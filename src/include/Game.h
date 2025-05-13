@@ -3,6 +3,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include "Player.h"
+#include "UI.h"
 
 class Game {
 private:
@@ -17,8 +18,9 @@ private:
     float accumulator;
     const float FIXED_TIME_STEP;
 
-    // Player instance
+    // Game objects
     Player* player;
+    UI* ui;
 
 public:
     Game();
