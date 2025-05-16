@@ -58,10 +58,10 @@ void Bullet::Update(float deltaTime) {
 
     // Update destination rectangle
     destRect.x = static_cast<int>(x - BULLET_SIZE/2);
-    destRect.y = static_cast<int>(y - BULLET_SIZE/2);
-
-    // Deactivate if off screen (with some margin)
-    if (x < -50 || x > 850 || y < -50 || y > 650) {
+    destRect.y = static_cast<int>(y - BULLET_SIZE/2);    // Deactivate if off screen (with some margin)
+    constexpr int margin = 50;  // How far bullets can go off screen before deactivating
+    if (x < -margin || x > Constants::WINDOW_WIDTH + margin || 
+        y < -margin || y > Constants::WINDOW_HEIGHT + margin) {
         active = false;
     }
 }
