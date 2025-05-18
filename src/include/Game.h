@@ -4,6 +4,8 @@
 #include <SDL2/SDL_image.h>
 #include "Player.h"
 #include "UI.h"
+#include "TileMap.h"
+#include "Camera.h" // Added Camera include
 
 class Game {
 private:
@@ -21,6 +23,12 @@ private:
     // Game objects
     Player* player;
     UI* ui;
+    TileMap* tilemap;
+    Camera* camera; // Added camera member
+
+    // Screen dimensions - consider moving to a Constants.h or config file
+    static constexpr int SCREEN_WIDTH = 1280;
+    static constexpr int SCREEN_HEIGHT = 720;
 
 public:
     Game();

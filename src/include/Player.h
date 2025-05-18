@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "Bullet.h"  // Include Bullet header
+#include "Camera.h"  // Include Camera header
 
 enum class PlayerState {
     IDLE,
@@ -77,27 +78,33 @@ public:
 
     void HandleInput(SDL_Event& event);
     void Update(float deltaTime);
-    void Render(SDL_Renderer* renderer);
-    void UpdateMousePosition(int x, int y);
-    void UpdateBullets(float deltaTime);
+    void Render(SDL_Renderer* renderer, Camera* camera); // Ensure this is the signature
+    void UpdateMousePosition(int worldMouseX, int worldMouseY); // Parameter name changed for clarity
+    void UpdateBullets(float deltaTime, Camera* camera); // Pass camera to update bullets for their rendering
     std::vector<Bullet*>& GetBullets() { return bullets; }
 
     // Health methods
     int GetHealth() const { return currentHealth; }
     int GetMaxHealth() const { return MAX_HEALTH; }
     void TakeDamage(int amount);
-    void Heal(int amount);
-
-    // Ammo methods
+    void Heal(int amount);    // Ammo methods
     int GetAmmo() const { return currentAmmo; }
     int GetMaxAmmo() const { return MAX_AMMO; }
+    
+    // Position methods
+    float GetX() const { return x; }
+    float GetY() const { return y; }
+    float GetRotation() const { return rotation; }
+    float GetCenterX() const; // Added
+    float GetCenterY() const; // Added
+    SDL_Rect GetDestRect() const { return destRect; } // Ensure this is public and correct
     
 private:
     void LoadTextures(SDL_Renderer* renderer);
     void LoadAnimationSet(SDL_Renderer* renderer, std::vector<SDL_Texture*>& frames, 
                          const std::string& path, int frameCount);
-    void RenderAimingLine(SDL_Renderer* renderer);
-    void RenderMuzzlePosition(SDL_Renderer* renderer);
+    void RenderAimingLine(SDL_Renderer* renderer, Camera* camera); // MODIFIED: Added Camera* parameter
+    void RenderMuzzlePosition(SDL_Renderer* renderer, Camera* camera); // MODIFIED: Added Camera* parameter
     void Shoot(SDL_Renderer* renderer);
     void UpdateAnimation(float deltaTime);
     std::vector<SDL_Texture*>& GetCurrentAnimationFrames();
