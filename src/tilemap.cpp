@@ -3,6 +3,9 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <cmath> // Added for std::round
+#include <vector> // For std::vector, though already used for map
+#include <algorithm> // For std::max, std::min
 
 TileMap::TileMap(SDL_Renderer* renderer)
     : renderer(renderer), tileset(nullptr), tileWidth(32), tileHeight(32), 
@@ -84,31 +87,40 @@ bool TileMap::LoadMap(const char* path) {
     return ParseCSV(path);
 }
 
-void TileMap::Render(Camera* camera) { // Modified to take Camera*
-    if (!tileset || map.empty() || !camera) return;
+// MODIFIED: Added worldOffsetX and worldOffsetY parameters
+void TileMap::Render(Camera* camera, int worldOffsetX, int worldOffsetY) { 
+    if (!tileset || map.empty() || !camera || tileWidth == 0 || tileHeight == 0) return;
 
-    // Get camera's view boundaries in world coordinates
     float camX = camera->GetX();
     float camY = camera->GetY();
     int camViewWidth = camera->GetViewWidth();
     int camViewHeight = camera->GetViewHeight();
 
-    // Determine the range of tiles to render based on camera view (tile culling)
-    int startCol = static_cast<int>(camX / tileWidth);
-    int endCol = static_cast<int>((camX + camViewWidth) / tileWidth) + 1;
-    int startRow = static_cast<int>(camY / tileHeight);
-    int endRow = static_cast<int>((camY + camViewHeight) / tileHeight) + 1;
+    // Determine the range of tiles to render based on camera and this chunk's world offset
+    // The camera's X and Y are absolute world coordinates.
+    // We need to find which part of *this specific chunk* is visible.
+    // A tile at (tile_col, tile_row) within this chunk has a world position of:
+    // (worldOffsetX + tile_col * tileWidth, worldOffsetY + tile_row * tileHeight)
 
-    // Clamp to map boundaries
-    startCol = std::max(0, startCol);
-    endCol = std::min(mapWidth, endCol);
-    startRow = std::max(0, startRow);
-    endRow = std::min(mapHeight, endRow);
+    // Effective camera position relative to this chunk's origin
+    float effectiveCamX = camX - worldOffsetX;
+    float effectiveCamY = camY - worldOffsetY;
 
-    for (int y = startRow; y < endRow; ++y) {
-        for (int x = startCol; x < endCol; ++x) {
-            int tileId = map[y][x];
-            if (tileId < 0) continue; // Skip empty tiles (-1 or other negative values)
+    int startCol = static_cast<int>(effectiveCamX / tileWidth);
+    int endCol = static_cast<int>((effectiveCamX + camViewWidth) / tileWidth) + 1;
+    int startRow = static_cast<int>(effectiveCamY / tileHeight);
+    int endRow = static_cast<int>((effectiveCamY + camViewHeight) / tileHeight) + 1;
+
+    // Clamp to this chunk's boundaries (0 to mapWidth/mapHeight in tiles)
+    int clampedStartCol = std::max(0, startCol);
+    int clampedEndCol = std::min(mapWidth, endCol);
+    int clampedStartRow = std::max(0, startRow);
+    int clampedEndRow = std::min(mapHeight, endRow);
+
+    for (int r = clampedStartRow; r < clampedEndRow; ++r) {
+        for (int c = clampedStartCol; c < clampedEndCol; ++c) {
+            int tileId = map[r][c];
+            if (tileId < 0) continue; // Skip empty tiles (-1 or other invalid)
 
             SDL_Rect srcRect;
             srcRect.x = (tileId % tilesetCols) * tileWidth;
@@ -117,13 +129,11 @@ void TileMap::Render(Camera* camera) { // Modified to take Camera*
             srcRect.h = tileHeight;
 
             SDL_Rect dstRect;
-            // Calculate world position of the tile
-            float tileWorldX = static_cast<float>(x * tileWidth);
-            float tileWorldY = static_cast<float>(y * tileHeight);
-
-            // Convert to screen position
-            dstRect.x = static_cast<int>(tileWorldX - camX);
-            dstRect.y = static_cast<int>(tileWorldY - camY);
+            // Calculate the screen position of the tile.
+            // Tile's world X = worldOffsetX + c * tileWidth
+            // Tile's screen X = (worldOffsetX + c * tileWidth) - camX
+            dstRect.x = static_cast<int>(std::round((worldOffsetX + c * tileWidth) - camX));
+            dstRect.y = static_cast<int>(std::round((worldOffsetY + r * tileHeight) - camY));
             dstRect.w = tileWidth;
             dstRect.h = tileHeight;
 

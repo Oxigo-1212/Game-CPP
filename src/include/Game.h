@@ -6,6 +6,7 @@
 #include "UI.h"
 #include "TileMap.h"
 #include "Camera.h" // Added Camera include
+#include "ChunkManager.h" // Added ChunkManager include
 
 class Game {
 private:
@@ -23,8 +24,9 @@ private:
     // Game objects
     Player* player;
     UI* ui;
-    TileMap* tilemap;
+    // TileMap* tilemap; // Will be managed by ChunkManager
     Camera* camera; // Added camera member
+    ChunkManager* chunkManager; // Added ChunkManager member
 
     // Screen dimensions - consider moving to a Constants.h or config file
     static constexpr int SCREEN_WIDTH = 1280;

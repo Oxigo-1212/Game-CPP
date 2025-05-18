@@ -123,21 +123,28 @@ void Player::UpdateAnimation(float deltaTime) {
         int frameCount = GetCurrentAnimationFrameCount();
         if (frameCount > 0) {
             currentFrame = (currentFrame + 1) % frameCount;
+
+            // If we complete a shooting/reloading/melee animation, return to idle
+            if (currentFrame == 0) { // Animation cycle completed
+                if (currentState == PlayerState::SHOOTING ||
+                    currentState == PlayerState::RELOADING) {
+                    currentState = PlayerState::IDLE;
+                } else if (currentState == PlayerState::MELEE) {
+                    currentState = PlayerState::IDLE;
+                    isMeleeing = false; // Reset isMeleeing flag
+                    std::cout << "Melee animation completed in UpdateAnimation. isMeleeing set to false. meleeTimer: " << meleeTimer << std::endl;
+                }
+            }
         } else {
             // If current animation has no frames, revert to IDLE and set frame to 0
             currentFrame = 0;
             if (currentState != PlayerState::IDLE) { // Avoid issues if IDLE itself has 0 frames
+                if (currentState == PlayerState::MELEE) {
+                    isMeleeing = false; // Also reset here if melee had 0 frames
+                    std::cout << "Melee state with 0 frames ended in UpdateAnimation. isMeleeing set to false." << std::endl;
+                }
                 currentState = PlayerState::IDLE;
             }
-        }
-        
-        // If we complete a shooting/reloading/melee animation, return to idle
-        // This should only happen if the animation actually played (frameCount > 0)
-        if (frameCount > 0 && currentFrame == 0 && 
-            (currentState == PlayerState::SHOOTING || 
-             currentState == PlayerState::RELOADING || 
-             currentState == PlayerState::MELEE)) {
-            currentState = PlayerState::IDLE;
         }
     }
 }
@@ -176,11 +183,22 @@ void Player::HandleInput(SDL_Event& event) {
                     }
                 }
             }
-            else if (event.button.button == SDL_BUTTON_RIGHT && !isReloading) {
-                // Only melee if enough time has passed
-                if (meleeTimer <= 0 && !isMeleeing) {
-                    MeleeAttack();
-                    meleeTimer = MELEE_COOLDOWN;
+            else if (event.button.button == SDL_BUTTON_RIGHT) {
+                std::cout << "Right Mouse Button Down. isReloading: " << isReloading 
+                          << ", meleeTimer: " << meleeTimer 
+                          << ", isMeleeing: " << isMeleeing << std::endl;
+                if (!isReloading) { // Check !isReloading before attempting melee
+                    // Only melee if enough time has passed
+                    if (meleeTimer <= 0 && !isMeleeing) {
+                        std::cout << "Attempting MeleeAttack()" << std::endl;
+                        MeleeAttack();
+                        meleeTimer = MELEE_COOLDOWN; // Set cooldown AFTER initiating attack
+                    } else {
+                        if (meleeTimer > 0) std::cout << "Melee cooldown active. Time left: " << meleeTimer << std::endl;
+                        if (isMeleeing) std::cout << "Already meleeing (isMeleeing is true)." << std::endl;
+                    }
+                } else {
+                     std::cout << "Cannot melee: Currently reloading (isReloading is true)." << std::endl;
                 }
             }
             break;
@@ -198,7 +216,8 @@ void Player::UpdateMousePosition(int worldMouseX, int worldMouseY) {
     rotation = atan2(dy, dx) * (180.0f / M_PI);
 }
 
-void Player::Update(float deltaTime) {    // Update timers
+void Player::Update(float deltaTime) { // MODIFIED - Removed mapPixelWidth, mapPixelHeight
+    // Update timers
     if (shootTimer > 0) {
         shootTimer -= deltaTime;
     }
@@ -213,42 +232,63 @@ void Player::Update(float deltaTime) {    // Update timers
         if (reloadTimer <= 0) {
             isReloading = false;
             currentAmmo = MAX_AMMO;
-            currentState = PlayerState::IDLE;
+            // Only set to IDLE if not currently shooting or meleeing, 
+            // though typically reload completion should interrupt those.
+            if (currentState == PlayerState::RELOADING) { // Ensure we only switch from RELOADING
+                currentState = PlayerState::IDLE;
+            }
         }
     }
     
-    // Reset melee state when animation completes
+    // Reset melee state if currentState changed from MELEE for other reasons (fallback)
+    // Primary reset is in UpdateAnimation when melee animation cycle finishes.
     if (isMeleeing && currentState != PlayerState::MELEE) {
         isMeleeing = false;
-    }// Handle movement and set state (WASD only)
-    bool isMoving = false;
-    if (keyStates[SDL_SCANCODE_W]) {
-        y -= speed * deltaTime;
-        isMoving = true;
-    }
-    if (keyStates[SDL_SCANCODE_S]) {
-        y += speed * deltaTime;
-        isMoving = true;
-    }
-    if (keyStates[SDL_SCANCODE_A]) {
-        x -= speed * deltaTime;
-        isMoving = true;
-    }    if (keyStates[SDL_SCANCODE_D]) {
-        x += speed * deltaTime;
-        isMoving = true;
+        std::cout << "isMeleeing reset in Player::Update() because currentState (" << static_cast<int>(currentState) 
+                  << ") is no longer MELEE. meleeTimer: " << meleeTimer << std::endl;
     }
 
-    // Update state based on movement
-    if (isMoving && currentState == PlayerState::IDLE) {
-        currentState = PlayerState::MOVING;
-        currentFrame = 0;
-    } else if (!isMoving && currentState == PlayerState::MOVING) {
-        currentState = PlayerState::IDLE;
-        currentFrame = 0;
-    }    // Update destination rectangle position based on player's world x,y
-    // Player's x,y is the center point.
-    destRect.x = static_cast<int>(x - destRect.w / 2.0f);
-    destRect.y = static_cast<int>(y - destRect.h / 2.0f);
+    float moveX = 0.0f;
+    float moveY = 0.0f;
+
+    // Player can now move while reloading or meleeing
+    if (keyStates[SDL_SCANCODE_W]) {
+        moveY -= 1;
+    }
+    if (keyStates[SDL_SCANCODE_S]) {
+        moveY += 1;
+    }
+    if (keyStates[SDL_SCANCODE_A]) {
+        moveX -= 1;
+    }
+    if (keyStates[SDL_SCANCODE_D]) {
+        moveX += 1;
+    }
+
+    // Normalize movement vector
+    float length = sqrt(moveX * moveX + moveY * moveY);
+    if (length > 0) {
+        moveX /= length;
+        moveY /= length;
+        // If not performing a higher priority action, set state to MOVING
+        if (!isReloading && !isMeleeing && currentState != PlayerState::SHOOTING && currentState != PlayerState::RELOADING && currentState != PlayerState::MELEE) {
+            currentState = PlayerState::MOVING;
+        }
+    } else {
+        // If not moving and not performing a higher priority action, set state to IDLE
+        if (!isReloading && !isMeleeing && currentState != PlayerState::SHOOTING && currentState != PlayerState::RELOADING && currentState != PlayerState::MELEE) {
+            currentState = PlayerState::IDLE;
+        }
+    }
+
+    // Update player position
+    x += moveX * speed * deltaTime;
+    y += moveY * speed * deltaTime;
+
+    // Update destRect for rendering based on new x, y (world coordinates)
+    // The camera will handle the offset for screen coordinates in Render()
+    destRect.x = static_cast<int>(x - destRect.w / 2.0f); // x is center
+    destRect.y = static_cast<int>(y - destRect.h / 2.0f); // y is center
 
     // Update animation
     UpdateAnimation(deltaTime);
@@ -347,20 +387,41 @@ void Player::Render(SDL_Renderer* renderer, Camera* camera) { // Modified to tak
         SDL_Texture* currentTexture = currentFrames[currentFrame];
         
         // Dynamically create the source rectangle based on the current texture's dimensions
-        SDL_Rect currentFrameSrcRect;
+        SDL_Rect currentFrameSrcRect; 
         SDL_QueryTexture(currentTexture, NULL, NULL, &currentFrameSrcRect.w, &currentFrameSrcRect.h);
         currentFrameSrcRect.x = 0;
         currentFrameSrcRect.y = 0;
 
+        // Dynamically set destRect dimensions based on the current texture, scaled
+        float scale = 0.5f; // Your desired scale factor
+        destRect.w = static_cast<int>(currentFrameSrcRect.w * scale);
+        destRect.h = static_cast<int>(currentFrameSrcRect.h * scale);
+
         // Calculate screen position for the player
         SDL_Rect screenDestRect;
-        screenDestRect.x = static_cast<int>(destRect.x - camera->GetX());
-        screenDestRect.y = static_cast<int>(destRect.y - camera->GetY());
-        screenDestRect.w = destRect.w; // Use pre-calculated scaled width from destRect
-        screenDestRect.h = destRect.h; // Use pre-calculated scaled height from destRect
+        screenDestRect.x = static_cast<int>((x - destRect.w / 2.0f) - camera->GetX());
+        screenDestRect.y = static_cast<int>((y - destRect.h / 2.0f) - camera->GetY());
+        screenDestRect.w = destRect.w; 
+        screenDestRect.h = destRect.h; 
+
+        // DEBUGGING OUTPUT START
+        if (currentState == PlayerState::MELEE || currentState == PlayerState::RELOADING || currentState == PlayerState::IDLE) { // Added IDLE for comparison
+            std::cout << "State: ";
+            switch (currentState) {
+                case PlayerState::IDLE: std::cout << "IDLE"; break;
+                case PlayerState::MELEE: std::cout << "MELEE"; break;
+                case PlayerState::RELOADING: std::cout << "RELOADING"; break;
+                default: std::cout << (int)currentState; break;
+            }
+            std::cout << " Frame: " << currentFrame
+                      << " TexW: " << currentFrameSrcRect.w << " TexH: " << currentFrameSrcRect.h
+                      << " DestW: " << destRect.w << " DestH: " << destRect.h
+                      << " ScreenDestW: " << screenDestRect.w << " ScreenDestH: " << screenDestRect.h
+                      << std::endl;
+        }
+        // DEBUGGING OUTPUT END
 
         SDL_Point center = {screenDestRect.w / 2, screenDestRect.h / 2};
-        // Use currentFrameSrcRect instead of the member srcRect
         SDL_RenderCopyEx(renderer, currentTexture, &currentFrameSrcRect, &screenDestRect, 
                         rotation, &center, SDL_FLIP_NONE);
         

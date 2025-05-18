@@ -1,7 +1,7 @@
 all: game
 
-game: main.o game.o player.o bullet.o ui.o tilemap.o camera.o
-	g++ -Isrc/include -o game main.o game.o player.o bullet.o ui.o tilemap.o camera.o -Lsrc/lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf
+game: main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o
+	g++ -Isrc/include -o game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o -Lsrc/lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf
 
 game.o: src/game.cpp src/include/Game.h src/include/Player.h src/include/UI.h
 	g++ -Isrc/include -c src/game.cpp -o game.o
@@ -21,11 +21,14 @@ tilemap.o: src/TileMap.cpp src/include/TileMap.h
 camera.o: src/Camera.cpp src/include/Camera.h
 	g++ -Isrc/include -c src/Camera.cpp -o camera.o
 
+ChunkManager.o: src/ChunkManager.cpp src/include/ChunkManager.h src/include/TileMap.h src/include/Player.h src/include/Camera.h
+	g++ -Isrc/include -c src/ChunkManager.cpp -o ChunkManager.o
+
 main.o: src/main.cpp src/include/Game.h
 	g++ -Isrc/include -c src/main.cpp -o main.o
 
 clean:
-	-del /F /Q game.exe main.o game.o player.o bullet.o ui.o tilemap.o camera.o 2>nul || rm -f game main.o game.o player.o bullet.o ui.o tilemap.o camera.o
+	-del /F /Q game.exe main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o 2>nul || rm -f game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o
 
 run:
 	./game

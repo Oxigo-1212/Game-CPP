@@ -77,7 +77,7 @@ public:
     ~Player();
 
     void HandleInput(SDL_Event& event);
-    void Update(float deltaTime);
+    void Update(float deltaTime); // MODIFIED - Removed map dimensions
     void Render(SDL_Renderer* renderer, Camera* camera); // Ensure this is the signature
     void UpdateMousePosition(int worldMouseX, int worldMouseY); // Parameter name changed for clarity
     void UpdateBullets(float deltaTime, Camera* camera); // Pass camera to update bullets for their rendering

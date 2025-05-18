@@ -1,4 +1,5 @@
 #include "include/Game.h"
+#include "include/ChunkManager.h" // Ensure ChunkManager is included
 #include <iostream>
 
 Game::Game() : 
@@ -11,8 +12,8 @@ Game::Game() :
     FIXED_TIME_STEP(1.0f / 60.0f),
     player(nullptr),
     ui(nullptr),
-    tilemap(nullptr),
-    camera(nullptr) { // Initialize camera to nullptr
+    camera(nullptr),
+    chunkManager(nullptr) { // Initialize chunkManager to nullptr
 }
 
 Game::~Game() {
@@ -55,28 +56,24 @@ bool Game::Initialize() {
     }
 
     // Create player instance
-    player = new Player(renderer);    // Create and initialize UI
+    player = new Player(renderer); 
+    
+    // Create and initialize UI
     ui = new UI(renderer);
     if (!ui->Initialize()) {
         std::cerr << "UI initialization failed" << std::endl;
         return false;
     }
 
-    // Create and load tilemap
-    tilemap = new TileMap(renderer);
-    if (!tilemap->LoadTileset("assets/tilesets/Grass 13  .png")) {
-        std::cerr << "Failed to load tileset" << std::endl;
-        return false;
-    }
-    if (!tilemap->LoadMap("assets/maps/grasstiles.csv")) {
-        std::cerr << "Failed to load map" << std::endl;
-        return false;
-    }
-
-    // Create camera instance
+    // Create camera instance BEFORE ChunkManager if ChunkManager needs player/camera info indirectly
+    // For now, player is enough for camera initial position.
     camera = new Camera(player->GetX() - SCREEN_WIDTH / 2.0f + player->GetDestRect().w / 2.0f, 
                         player->GetY() - SCREEN_HEIGHT / 2.0f + player->GetDestRect().h / 2.0f, 
                         SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    // Create ChunkManager instance
+    // Ensure player is initialized before passing to ChunkManager
+    chunkManager = new ChunkManager(renderer, player, "assets/maps/grasstiles.csv", "assets/tilesets/Grass 13  .png");
 
     isRunning = true;
     previousTime = SDL_GetTicks();
@@ -101,12 +98,19 @@ void Game::HandleEvents() {
 }
 
 void Game::Update(float deltaTime) {
-    player->Update(deltaTime);
+    if (player) { // Player update no longer needs map dimensions
+        player->Update(deltaTime);
+    }
+
+    if (chunkManager) { // Update ChunkManager
+        chunkManager->Update(deltaTime);
+    }
+    
     // Update camera to follow the player's center
-    SDL_Rect playerDest = player->GetDestRect();
-    camera->Update(player->GetX() + playerDest.w / 2.0f, 
-                   player->GetY() + playerDest.h / 2.0f, 
-                   deltaTime);
+    if (player && camera) { 
+        // Camera follows the logical player position, which is now wrapped.
+        camera->Update(player->GetX(), player->GetY(), deltaTime);
+    }
 }
 
 void Game::Render() {
@@ -114,7 +118,9 @@ void Game::Render() {
     SDL_RenderClear(renderer);
 
     // Render tilemap first (background), adjusted by camera
-    tilemap->Render(camera);
+    if (chunkManager) {
+        chunkManager->Render(camera);
+    }
 
     // Render player on top of tilemap, adjusted by camera
     player->Render(renderer, camera);
@@ -165,9 +171,9 @@ void Game::Cleanup() {
         ui = nullptr;
     }
 
-    if (tilemap) {
-        delete tilemap;
-        tilemap = nullptr;
+    if (chunkManager) { // Add ChunkManager cleanup
+        delete chunkManager;
+        chunkManager = nullptr;
     }
 
     if (camera) { // Add camera cleanup
