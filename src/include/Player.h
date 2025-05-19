@@ -90,6 +90,7 @@ public:
     void Heal(int amount);    // Ammo methods
     int GetAmmo() const { return currentAmmo; }
     int GetMaxAmmo() const { return MAX_AMMO; }
+    bool IsDead() const { return currentHealth <= 0; }
     
     // Position methods
     float GetX() const { return x; }

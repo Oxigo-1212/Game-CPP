@@ -1,6 +1,9 @@
 #include "include/Game.h"
 #include "include/ChunkManager.h" // Ensure ChunkManager is included
 #include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <cmath>
 
 Game::Game() : 
     isRunning(false), 
@@ -13,7 +16,15 @@ Game::Game() :
     player(nullptr),
     ui(nullptr),
     camera(nullptr),
-    chunkManager(nullptr) { // Initialize chunkManager to nullptr
+    chunkManager(nullptr), // Initialize chunkManager to nullptr
+    currentWave(0),
+    zombiesRemainingInWave(0),
+    spawnTimer(0),
+    timeBetweenSpawns(INITIAL_SPAWN_DELAY),
+    waveDelay(WAVE_DELAY),
+    waveTimer(0),
+    waveInProgress(false) {
+    std::srand(static_cast<unsigned>(std::time(nullptr)));
 }
 
 Game::~Game() {
@@ -67,13 +78,18 @@ bool Game::Initialize() {
 
     // Create camera instance BEFORE ChunkManager if ChunkManager needs player/camera info indirectly
     // For now, player is enough for camera initial position.
-    camera = new Camera(player->GetX() - SCREEN_WIDTH / 2.0f + player->GetDestRect().w / 2.0f, 
-                        player->GetY() - SCREEN_HEIGHT / 2.0f + player->GetDestRect().h / 2.0f, 
-                        SCREEN_WIDTH, SCREEN_HEIGHT);
+    camera = new Camera(player->GetX() - Constants::WINDOW_WIDTH / 2.0f + player->GetDestRect().w / 2.0f, 
+                        player->GetY() - Constants::WINDOW_HEIGHT / 2.0f + player->GetDestRect().h / 2.0f, 
+                        Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
 
     // Create ChunkManager instance
     // Ensure player is initialized before passing to ChunkManager
     chunkManager = new ChunkManager(renderer, player, "assets/maps/grasstiles.csv", "assets/tilesets/Grass 13  .png");
+
+    // Initialize wave system instead of spawning a single zombie
+    currentWave = 0;
+    waveInProgress = false;
+    waveTimer = 0;
 
     isRunning = true;
     previousTime = SDL_GetTicks();
@@ -98,8 +114,36 @@ void Game::HandleEvents() {
 }
 
 void Game::Update(float deltaTime) {
-    if (player) { // Player update no longer needs map dimensions
+    if (player) {
         player->Update(deltaTime);
+        // Check if player died
+        if (player->IsDead()) {
+            std::cout << "Game Over!" << std::endl;
+            isRunning = false;
+            return;
+        }
+    }
+
+    // Update wave system
+    UpdateWaveState(deltaTime);    // Update zombies
+    for (auto it = zombies.begin(); it != zombies.end();) {
+        Zombie* zombie = *it;
+        zombie->Update(deltaTime, player, zombies);
+
+        // Check collision with player's bullets
+        auto& bullets = player->GetBullets();
+        for (auto bulletIt = bullets.begin(); bulletIt != bullets.end();) {
+            if (zombie->CheckCollisionWithBullet(*bulletIt)) {
+                zombie->TakeDamage();
+                (*bulletIt)->Deactivate();
+            }
+            ++bulletIt;
+        }        if (zombie->IsDead()) {
+            delete zombie;
+            it = zombies.erase(it);
+        } else {
+            ++it;
+        }
     }
 
     if (chunkManager) { // Update ChunkManager
@@ -113,6 +157,66 @@ void Game::Update(float deltaTime) {
     }
 }
 
+void Game::UpdateWaveState(float deltaTime) {
+    if (!waveInProgress) {
+        waveTimer += deltaTime;
+        if (waveTimer >= waveDelay) {
+            // Start new wave
+            currentWave++;
+            zombiesRemainingInWave = BASE_ZOMBIES_PER_WAVE + (currentWave - 1) * 2;
+            waveInProgress = true;
+            spawnTimer = 0;
+            timeBetweenSpawns = std::max(
+                MIN_SPAWN_DELAY,
+                INITIAL_SPAWN_DELAY - (currentWave - 1) * SPAWN_DELAY_DECREASE
+            );
+            std::cout << "Wave " << currentWave << " started! Zombies: " << zombiesRemainingInWave << std::endl;
+        }
+    } else {
+        if (zombiesRemainingInWave > 0) {
+            spawnTimer += deltaTime;
+            if (spawnTimer >= timeBetweenSpawns) {
+                SpawnZombie();
+                spawnTimer = 0;
+            }
+        } else if (zombies.empty()) {
+            // Wave completed
+            waveInProgress = false;
+            waveTimer = 0;
+            std::cout << "Wave " << currentWave << " completed! Next wave in " << WAVE_DELAY << " seconds" << std::endl;
+        }
+    }
+}
+
+SDL_Point Game::GetRandomSpawnPosition() const {
+    if (!player) return {0, 0};
+
+    // Get random angle
+    float angle = static_cast<float>(rand()) / RAND_MAX * 2 * M_PI;
+    
+    // Get random distance between MIN and MAX spawn distance
+    float distance = MIN_SPAWN_DISTANCE + 
+        (static_cast<float>(rand()) / RAND_MAX * (MAX_SPAWN_DISTANCE - MIN_SPAWN_DISTANCE));
+    
+    // Calculate spawn position relative to player
+    float playerX = player->GetX();
+    float playerY = player->GetY();
+    
+    return {
+        static_cast<int>(playerX + cos(angle) * distance),
+        static_cast<int>(playerY + sin(angle) * distance)
+    };
+}
+
+void Game::SpawnZombie() {
+    if (zombiesRemainingInWave <= 0) return;
+
+    SDL_Point spawnPos = GetRandomSpawnPosition();
+    zombies.push_back(new Zombie(static_cast<float>(spawnPos.x), static_cast<float>(spawnPos.y)));
+    zombiesRemainingInWave--;
+    std::cout << "Spawned zombie at (" << spawnPos.x << ", " << spawnPos.y << "). Remaining in wave: " << zombiesRemainingInWave << std::endl;
+}
+
 void Game::Render() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
@@ -120,6 +224,9 @@ void Game::Render() {
     // Render tilemap first (background), adjusted by camera
     if (chunkManager) {
         chunkManager->Render(camera);
+    }    // Render zombies
+    for (auto zombie : zombies) {
+        zombie->Render(renderer, camera);
     }
 
     // Render player on top of tilemap, adjusted by camera
@@ -161,6 +268,12 @@ void Game::Run() {
 }
 
 void Game::Cleanup() {    
+    // Clean up zombies
+    for (auto zombie : zombies) {
+        delete zombie;
+    }
+    zombies.clear();
+
     if (player) {
         delete player;
         player = nullptr;

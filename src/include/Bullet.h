@@ -30,6 +30,7 @@ public:
     void Render(SDL_Renderer* renderer, Camera* camera); // Modified Render signature
     bool IsActive() const { return active; }
     void Deactivate() { active = false; }
+    SDL_Rect GetHitbox() const { return destRect; } // Added GetHitbox method
 
 private:
     bool LoadTexture(SDL_Renderer* renderer);
