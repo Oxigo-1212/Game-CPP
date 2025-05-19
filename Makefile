@@ -1,7 +1,7 @@
 all: game
 
-game: main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o
-	g++ -Isrc/include -o game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o -Lsrc/lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf
+game: main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o
+	g++ -Isrc/include -o game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o -Lsrc/lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf
 
 game.o: src/game.cpp src/include/Game.h src/include/Player.h src/include/UI.h
 	g++ -Isrc/include -c src/game.cpp -o game.o
@@ -27,11 +27,14 @@ ChunkManager.o: src/ChunkManager.cpp src/include/ChunkManager.h src/include/Tile
 zombie.o: src/zombie.cpp src/include/Zombie.h src/include/Player.h src/include/Bullet.h
 	g++ -Isrc/include -c src/zombie.cpp -o zombie.o
 
+zombiepool.o: src/zombiepool.cpp src/include/ZombiePool.h src/include/Zombie.h
+	g++ -Isrc/include -c src/zombiepool.cpp -o zombiepool.o
+
 main.o: src/main.cpp src/include/Game.h
 	g++ -Isrc/include -c src/main.cpp -o main.o
 
 clean:
-	-del /F /Q game.exe main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o 2>nul || rm -f game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o
+	-del /F /Q game.exe main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o 2>nul || rm -f game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o
 
 run:
 	./game

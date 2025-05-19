@@ -32,6 +32,11 @@ public:
     void Deactivate() { active = false; }
     SDL_Rect GetHitbox() const { return destRect; } // Added GetHitbox method
 
+    // Position and rotation getters
+    float GetX() const { return x; }
+    float GetY() const { return y; }
+    float GetRotation() const { return rotation; }
+
 private:
     bool LoadTexture(SDL_Renderer* renderer);
 };

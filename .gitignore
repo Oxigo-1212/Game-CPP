@@ -1,0 +1,8 @@
+/.vscode
+*.o
+game.exe
+game.o
+*.o
+game.o
+*.exe
+game.exe

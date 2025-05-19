@@ -1,16 +1,91 @@
 #include "include/Zombie.h"
 #include <cmath>
+#include <iostream>
 
-Zombie::Zombie(float startX, float startY) 
-    : x(startX), y(startY), health(5), isDead(false), speed(100.0f), isAttacking(false), lastAttackTime(0) {
+Zombie::Zombie(SDL_Renderer* renderer, float startX, float startY) 
+    : renderer(renderer), x(startX), y(startY), rotation(0.0f),
+      health(5), isDead(false), speed(100.0f), isAttacking(false), lastAttackTime(0),
+      currentFrame(0), frameTimer(0.0f), frameDuration(DEFAULT_FRAME_DURATION) {
+    
     // Initialize hitbox
     hitbox.w = 50;  // width of zombie
     hitbox.h = 50;  // height of zombie
-    hitbox.x = static_cast<int>(x - hitbox.w / 2); // Center the hitbox on x
-    hitbox.y = static_cast<int>(y - hitbox.h / 2); // Center the hitbox on y
+    hitbox.x = static_cast<int>(x - hitbox.w / 2);
+    hitbox.y = static_cast<int>(y - hitbox.h / 2);
+
+    LoadTextures();
 }
 
 Zombie::~Zombie() {
+    // Cleanup animation textures
+    for (SDL_Texture* tex : moveFrames) {
+        if (tex) SDL_DestroyTexture(tex);
+    }
+    for (SDL_Texture* tex : attackFrames) {
+        if (tex) SDL_DestroyTexture(tex);
+    }
+}
+
+void Zombie::LoadTextures() {
+    // Load move animation
+    LoadAnimationSet(moveFrames, "assets/zombie/move/", "zombie_move_", MOVE_FRAME_COUNT);
+    // Load attack animation
+    LoadAnimationSet(attackFrames, "assets/zombie/attack/", "zombie_attack_", ATTACK_FRAME_COUNT);
+
+    // Set up source and destination rectangles
+    if (!moveFrames.empty() && moveFrames[0]) {
+        SDL_QueryTexture(moveFrames[0], nullptr, nullptr, &srcRect.w, &srcRect.h);
+        srcRect.x = 0;
+        srcRect.y = 0;
+        
+        // Scale the sprite to match player size (approximately 64x64)
+        float scale = 0.5f;  // Adjust this to match player size
+        destRect.w = static_cast<int>(srcRect.w * scale);
+        destRect.h = static_cast<int>(srcRect.h * scale);
+        
+        // Update hitbox to match the sprite size
+        hitbox.w = static_cast<int>(destRect.w * 0.6f);  // Make hitbox slightly smaller than sprite
+        hitbox.h = static_cast<int>(destRect.h * 0.6f);
+    }
+}
+
+void Zombie::LoadAnimationSet(std::vector<SDL_Texture*>& frames, const std::string& basePath, 
+                            const std::string& prefix, int frameCount) {
+    frames.clear();
+    for (int i = 0; i < frameCount; ++i) {
+        std::string path = basePath + prefix + std::to_string(i) + ".png";
+        SDL_Surface* surface = IMG_Load(path.c_str());
+        if (!surface) {
+            std::cerr << "Failed to load zombie texture: " << path << " Error: " << IMG_GetError() << std::endl;
+            continue;
+        }
+        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_FreeSurface(surface);
+        if (!texture) {
+            std::cerr << "Failed to create texture: " << SDL_GetError() << std::endl;
+            continue;
+        }
+        frames.push_back(texture);
+    }
+}
+
+void Zombie::UpdateAnimation(float deltaTime) {
+    frameTimer += deltaTime;
+    if (frameTimer >= frameDuration) {
+        frameTimer = 0;
+        currentFrame++;
+        
+        const auto& currentFrames = isAttacking ? attackFrames : moveFrames;
+        int maxFrames = isAttacking ? ATTACK_FRAME_COUNT : MOVE_FRAME_COUNT;
+        
+        if (currentFrame >= maxFrames) {
+            currentFrame = 0;
+            if (isAttacking) {
+                // Optional: Reset attack state after animation completes
+                // isAttacking = false;
+            }
+        }
+    }
 }
 
 void Zombie::Update(float deltaTime, Player* player, const std::vector<Zombie*>& zombies) {
@@ -19,10 +94,12 @@ void Zombie::Update(float deltaTime, Player* player, const std::vector<Zombie*>&
     // Get player position and calculate direction
     float playerX = player->GetX();
     float playerY = player->GetY();
-      // Calculate distance to player
     float dx = playerX - x;
     float dy = playerY - y;
     float distanceToPlayer = std::sqrt(dx * dx + dy * dy);
+
+    // Calculate rotation to face the player
+    rotation = (atan2(dy, dx) * 180.0f / M_PI);  // Remove the +90 if zombie sprite faces right by default
 
     // Calculate base direction based on priority and formation
     if (distanceToPlayer < CLOSE_RANGE) {
@@ -89,43 +166,92 @@ void Zombie::Update(float deltaTime, Player* player, const std::vector<Zombie*>&
     x += dx * speed * deltaTime;
     y += dy * speed * deltaTime;
 
-    // Update hitbox position
+    // Update hitbox position to be centered on the zombie
     hitbox.x = static_cast<int>(x - hitbox.w / 2);
     hitbox.y = static_cast<int>(y - hitbox.h / 2);
 
-    // Check if can attack
+    // Update attack state
+    bool wasAttacking = isAttacking;
     if (CheckCollisionWithPlayer(player)) {
         Uint32 currentTime = SDL_GetTicks();
         if (currentTime - lastAttackTime >= ATTACK_COOLDOWN) {
             isAttacking = true;
             lastAttackTime = currentTime;
             player->TakeDamage(10);
+            if (!wasAttacking) {
+                // Reset animation when starting to attack
+                currentFrame = 0;
+                frameTimer = 0;
+            }
         }
     } else {
-        isAttacking = false;
+        if (wasAttacking) {
+            // Reset animation when stopping attack
+            isAttacking = false;
+            currentFrame = 0;
+            frameTimer = 0;
+        }
     }
+
+    // Update animation
+    UpdateAnimation(deltaTime);
 }
 
 void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
     if (isDead) return;
 
-    // Convert world coordinates to screen coordinates
-    SDL_Rect screenRect = {
+    // Get current animation frame
+    const auto& currentFrames = isAttacking ? attackFrames : moveFrames;
+    if (currentFrames.empty() || currentFrame >= currentFrames.size() || !currentFrames[currentFrame]) {
+        // Fallback rendering if textures aren't loaded
+        SDL_Rect screenRect = {
+            static_cast<int>(hitbox.x - camera->GetX()),
+            static_cast<int>(hitbox.y - camera->GetY()),
+            hitbox.w,
+            hitbox.h
+        };
+        SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+        SDL_RenderFillRect(renderer, &screenRect);
+        return;
+    }
+
+    // Update destination rectangle position for rendering
+    destRect.x = static_cast<int>(x - destRect.w / 2 - camera->GetX());
+    destRect.y = static_cast<int>(y - destRect.h / 2 - camera->GetY());
+
+    // Render the current frame with rotation
+    SDL_Point center = { destRect.w / 2, destRect.h / 2 };
+    SDL_RenderCopyEx(renderer, currentFrames[currentFrame], &srcRect, &destRect, 
+                     rotation, &center, SDL_FLIP_NONE);
+
+    // Always render hitbox for debugging
+    SDL_Rect hitboxScreen = {
         static_cast<int>(hitbox.x - camera->GetX()),
         static_cast<int>(hitbox.y - camera->GetY()),
         hitbox.w,
         hitbox.h
     };
-
-    // Set color to blue for the zombie
-    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
-    SDL_RenderFillRect(renderer, &screenRect);
-
-    // If attacking, draw a red border
-    if (isAttacking) {
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_RenderDrawRect(renderer, &screenRect);
-    }
+    
+    // Draw hitbox outline in red
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    SDL_RenderDrawRect(renderer, &hitboxScreen);
+    
+    // Draw hit points above the zombie
+    SDL_Rect healthBar = {
+        hitboxScreen.x,
+        hitboxScreen.y - 10,
+        hitboxScreen.w,
+        5
+    };
+    
+    // Health bar background (red)
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    SDL_RenderFillRect(renderer, &healthBar);
+    
+    // Health bar foreground (green)
+    healthBar.w = static_cast<int>((health / 5.0f) * hitboxScreen.w);
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+    SDL_RenderFillRect(renderer, &healthBar);
 }
 
 bool Zombie::CheckCollisionWithBullet(Bullet* bullet) {
@@ -274,4 +400,21 @@ void Zombie::Cohere(const std::vector<Zombie*>& zombies, float& dx, float& dy) {
             dy /= length;
         }
     }
+}
+
+void Zombie::Reset(float newX, float newY) {
+    x = newX;
+    y = newY;
+    rotation = 0.0f;
+    health = 5;
+    isDead = false;
+    speed = 100.0f;
+    isAttacking = false;
+    lastAttackTime = 0;
+    currentFrame = 0;
+    frameTimer = 0.0f;
+    
+    // Reset hitbox position
+    hitbox.x = static_cast<int>(x - hitbox.w / 2);
+    hitbox.y = static_cast<int>(y - hitbox.h / 2);
 }

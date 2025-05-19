@@ -16,7 +16,8 @@ Game::Game() :
     player(nullptr),
     ui(nullptr),
     camera(nullptr),
-    chunkManager(nullptr), // Initialize chunkManager to nullptr
+    chunkManager(nullptr),
+    zombiePool(nullptr),
     currentWave(0),
     zombiesRemainingInWave(0),
     spawnTimer(0),
@@ -86,6 +87,15 @@ bool Game::Initialize() {
     // Ensure player is initialized before passing to ChunkManager
     chunkManager = new ChunkManager(renderer, player, "assets/maps/grasstiles.csv", "assets/tilesets/Grass 13  .png");
 
+    // Initialize the zombie pool
+    try {
+        std::cout << "Game: Creating zombie pool..." << std::endl;
+        zombiePool = new ZombiePool(renderer, ZOMBIE_POOL_SIZE);
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to create zombie pool: " << e.what() << std::endl;
+        return false;
+    }
+
     // Initialize wave system instead of spawning a single zombie
     currentWave = 0;
     waveInProgress = false;
@@ -125,24 +135,41 @@ void Game::Update(float deltaTime) {
     }
 
     // Update wave system
-    UpdateWaveState(deltaTime);    // Update zombies
-    for (auto it = zombies.begin(); it != zombies.end();) {
-        Zombie* zombie = *it;
-        zombie->Update(deltaTime, player, zombies);
+    UpdateWaveState(deltaTime);
+
+    // Update zombies through the pool
+    if (zombiePool) {
+        zombiePool->Update(deltaTime, player);
 
         // Check collision with player's bullets
         auto& bullets = player->GetBullets();
         for (auto bulletIt = bullets.begin(); bulletIt != bullets.end();) {
-            if (zombie->CheckCollisionWithBullet(*bulletIt)) {
-                zombie->TakeDamage();
-                (*bulletIt)->Deactivate();
+            Bullet* bullet = *bulletIt;
+            if (!bullet->IsActive()) {
+                ++bulletIt;
+                continue;
             }
-            ++bulletIt;
-        }        if (zombie->IsDead()) {
-            delete zombie;
-            it = zombies.erase(it);
-        } else {
-            ++it;
+
+            // Let the zombie pool handle bullet collisions and death
+            bool hitZombie = false;
+            SDL_Rect bulletRect = bullet->GetHitbox();
+            SDL_Point bulletPos = { static_cast<int>(bullet->GetX()), static_cast<int>(bullet->GetY()) };
+            
+            for (Zombie* zombie : zombiePool->GetActiveZombies()) {
+                if (!zombie->IsDead() && zombie->CheckCollisionWithBullet(bullet)) {
+                    zombie->TakeDamage();
+                    bullet->Deactivate();
+                    hitZombie = true;
+                    break;
+                }
+            }
+            
+            if (hitZombie) {
+                bulletIt = bullets.erase(bulletIt);
+                delete bullet;
+            } else {
+                ++bulletIt;
+            }
         }
     }
 
@@ -178,12 +205,23 @@ void Game::UpdateWaveState(float deltaTime) {
             if (spawnTimer >= timeBetweenSpawns) {
                 SpawnZombie();
                 spawnTimer = 0;
+            }        } else {
+            // Check if all active zombies are dead
+            bool allZombiesDead = true;
+            if (zombiePool) {
+                for (Zombie* zombie : zombiePool->GetActiveZombies()) {
+                    if (!zombie->IsDead()) {
+                        allZombiesDead = false;
+                        break;
+                    }
+                }
             }
-        } else if (zombies.empty()) {
-            // Wave completed
-            waveInProgress = false;
-            waveTimer = 0;
-            std::cout << "Wave " << currentWave << " completed! Next wave in " << WAVE_DELAY << " seconds" << std::endl;
+
+            if (allZombiesDead) {
+                waveTimer = 0;
+                waveInProgress = false;
+                std::cout << "Wave " << currentWave << " completed! Next wave in " << WAVE_DELAY << " seconds" << std::endl;
+            }
         }
     }
 }
@@ -209,12 +247,18 @@ SDL_Point Game::GetRandomSpawnPosition() const {
 }
 
 void Game::SpawnZombie() {
-    if (zombiesRemainingInWave <= 0) return;
+    if (zombiesRemainingInWave <= 0 || !zombiePool) return;
 
     SDL_Point spawnPos = GetRandomSpawnPosition();
-    zombies.push_back(new Zombie(static_cast<float>(spawnPos.x), static_cast<float>(spawnPos.y)));
-    zombiesRemainingInWave--;
-    std::cout << "Spawned zombie at (" << spawnPos.x << ", " << spawnPos.y << "). Remaining in wave: " << zombiesRemainingInWave << std::endl;
+    Zombie* zombie = zombiePool->GetZombie();
+    if (zombie) {
+        zombie->Reset(static_cast<float>(spawnPos.x), static_cast<float>(spawnPos.y));
+        zombiesRemainingInWave--;
+        std::cout << "Spawned zombie at (" << spawnPos.x << ", " << spawnPos.y 
+                  << "). Remaining in wave: " << zombiesRemainingInWave << std::endl;
+    } else {
+        std::cerr << "Failed to get zombie from pool" << std::endl;
+    }
 }
 
 void Game::Render() {
@@ -224,16 +268,16 @@ void Game::Render() {
     // Render tilemap first (background), adjusted by camera
     if (chunkManager) {
         chunkManager->Render(camera);
-    }    // Render zombies
-    for (auto zombie : zombies) {
-        zombie->Render(renderer, camera);
+    }    // Render zombies using the pool
+    if (zombiePool) {
+        zombiePool->Render(renderer, camera);
     }
 
     // Render player on top of tilemap, adjusted by camera
     player->Render(renderer, camera);
     
     // Render UI with player's current health and ammo
-    ui->Render(player->GetHealth(), player->GetMaxHealth(), player->GetAmmo(), player->GetMaxAmmo());
+    ui->Render(player->GetHealth(), player->GetMaxHealth(), player->GetCurrentAmmo(), player->GetMaxAmmo());
 
     SDL_RenderPresent(renderer);
 }
@@ -268,11 +312,15 @@ void Game::Run() {
 }
 
 void Game::Cleanup() {    
-    // Clean up zombies
-    for (auto zombie : zombies) {
-        delete zombie;
+    // Clean up zombie pool
+    if (zombiePool) {
+        try {
+            delete zombiePool;
+        } catch (const std::exception& e) {
+            std::cerr << "Error cleaning up zombie pool: " << e.what() << std::endl;
+        }
+        zombiePool = nullptr;
     }
-    zombies.clear();
 
     if (player) {
         delete player;
