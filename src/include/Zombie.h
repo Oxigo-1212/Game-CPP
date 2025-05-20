@@ -4,6 +4,7 @@
 #include "Player.h"
 #include "Bullet.h"
 #include "Camera.h"
+#include "WeaponConfig.h"
 #include <vector>
 #include <string>
 
@@ -20,7 +21,13 @@ private:
     float speed;
     bool isAttacking;
     Uint32 lastAttackTime;
-    const Uint32 ATTACK_COOLDOWN = 1000; // 1 second cooldown between attacks
+    const Uint32 ATTACK_COOLDOWN = 1000; // 1 second cooldown between attacks    // Damage and health constants
+    static constexpr int STARTING_HEALTH = 8;      // Zombie starting health
+
+    // Knockback properties
+    float knockbackVelocityX;
+    float knockbackVelocityY;
+    float knockbackDuration;
 
     // Animation members
     SDL_Renderer* renderer;
@@ -63,7 +70,8 @@ public:
     float GetX() const { return x; }
     float GetY() const { return y; }
     float GetRotation() const { return rotation; }
-    void Reset(float newX, float newY);
+    void Reset(float newX, float newY, float speedMultiplier = 1.0f);    // Reset zombie position and stats
+    void TakeDamageWithKnockback(float damageX, float damageY, bool isShotgunPellet, Bullet* bullet);
 
 private:
     void ApplyFlockingBehavior(const std::vector<Zombie*>& zombies, float& dx, float& dy);

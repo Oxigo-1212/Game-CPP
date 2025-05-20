@@ -6,6 +6,9 @@
 #include <map>
 #include "Bullet.h"  // Include Bullet header
 #include "Camera.h"  // Include Camera header
+#include "WeaponConfig.h"  // Include weapon configuration
+#include "WaveManager.h"  // Add WaveManager include
+#include "UI.h"  // Include UI header
 
 enum class WeaponType {
     PISTOL,
@@ -17,53 +20,25 @@ enum class PlayerState {
     IDLE,
     MOVING,
     SHOOTING,
-    RELOADING,
-    MELEE
+    RELOADING
 };
 
 class Player {
-private:
-    // Health constants
+private:    // Health constants
     static constexpr int STARTING_HEALTH = 100;
-    static constexpr int MAX_HEALTH = 100;
-
-    // Weapon constants
-    // Pistol
-    static constexpr float PISTOL_MUZZLE_OFFSET_X = 50.0f;
-    static constexpr float PISTOL_MUZZLE_OFFSET_Y = 28.0f;
-    static constexpr float PISTOL_FIRE_RATE = 0.25f;  // Time between shots in seconds
-    static constexpr float PISTOL_RELOAD_TIME = 1.0f;
-    static constexpr int PISTOL_MAX_AMMO = 12;
-      // Rifle
-    static constexpr float RIFLE_MUZZLE_OFFSET_X = 50.0f;
-    static constexpr float RIFLE_MUZZLE_OFFSET_Y = 28.0f;
-    static constexpr float RIFLE_FIRE_RATE = 0.1f;    // Faster fire rate for auto
-    static constexpr float RIFLE_RELOAD_TIME = 1.0f;  // Same as pistol reload time
-    static constexpr int RIFLE_MAX_AMMO = 50;         // Larger magazine
-    // Shotgun
-    static constexpr float SHOTGUN_MUZZLE_OFFSET_X = 50.0f;
-    static constexpr float SHOTGUN_MUZZLE_OFFSET_Y = 28.0f;
-    static constexpr float SHOTGUN_FIRE_RATE = 0.8f;    // Slower fire rate for shotgun
-    static constexpr float SHOTGUN_RELOAD_TIME = 1.5f;  // Longer reload time
-    static constexpr int SHOTGUN_MAX_AMMO = 8;          // Small magazine
-    static constexpr int SHOTGUN_PELLETS = 8;           // Number of pellets per shot
-    static constexpr float SHOTGUN_SPREAD = 20.0f;      // Spread angle in degrees
-    
-    static constexpr float MELEE_COOLDOWN = 0.4f;     // Time between melee attacks
-
-    // Animation constants
+    static constexpr int MAX_HEALTH = 100;// Animation constants
     static constexpr int IDLE_FRAME_COUNT = 20;
     static constexpr int MOVE_FRAME_COUNT = 20;
     static constexpr int SHOOT_FRAME_COUNT = 3;
     static constexpr int RELOAD_FRAME_COUNT = 15;
-    static constexpr int MELEE_FRAME_COUNT = 15;
     static constexpr float DEFAULT_FRAME_DURATION = 0.05f;
 
     SDL_Renderer* renderer;  // Store renderer for shooting
+    UI* ui;  // UI reference for notifications
     float x, y;
     float speed;
     float rotation;  // Angle in degrees
-    int mouseX, mouseY;  // Mouse coordinates
+    float mouseX, mouseY;  // Mouse coordinates in world space
     SDL_Rect srcRect;
     SDL_Rect destRect;
     bool keyStates[SDL_NUM_SCANCODES];
@@ -81,13 +56,20 @@ private:
     int rifleAmmo;
     int shotgunAmmo;
 
+    // Weapon offset constants (visual only)
+    static constexpr float PISTOL_MUZZLE_OFFSET_X = 50.0f;
+    static constexpr float PISTOL_MUZZLE_OFFSET_Y = 28.0f;
+    static constexpr float RIFLE_MUZZLE_OFFSET_X = 50.0f;
+    static constexpr float RIFLE_MUZZLE_OFFSET_Y = 28.0f;
+    static constexpr float SHOTGUN_MUZZLE_OFFSET_X = 50.0f;
+    static constexpr float SHOTGUN_MUZZLE_OFFSET_Y = 28.0f;
+
     // Animation properties
     PlayerState currentState;
     std::vector<SDL_Texture*> idleFrames;
     std::vector<SDL_Texture*> moveFrames;
     std::vector<SDL_Texture*> shootFrames;
     std::vector<SDL_Texture*> reloadFrames;
-    std::vector<SDL_Texture*> meleeFrames;
     int currentFrame;
     float frameTimer;
     float frameDuration;
@@ -97,14 +79,12 @@ private:
     std::map<WeaponType, std::vector<SDL_Texture*>> moveAnimations;
     std::map<WeaponType, std::vector<SDL_Texture*>> shootAnimations;
     std::map<WeaponType, std::vector<SDL_Texture*>> reloadAnimations;
-    std::map<WeaponType, std::vector<SDL_Texture*>> meleeAnimations;
 
     // Collection of bullets
     std::vector<Bullet*> bullets;
 
-    // Melee attack properties
-    float meleeTimer;
-    bool isMeleeing;
+    // WaveManager reference
+    WaveManager* waveManager;
 
     // Helper functions for animation
     bool VerifyAnimationLoading(const std::string& weaponPath, WeaponType weapon);
@@ -113,7 +93,7 @@ private:
     void UpdateAnimationReferences();
 
 public:
-    Player(SDL_Renderer* renderer, float startX = 400.0f, float startY = 300.0f);
+    Player(SDL_Renderer* renderer, WaveManager* waveManager, UI* ui, float startX = 400.0f, float startY = 300.0f);
     ~Player();
 
     void HandleInput(SDL_Event& event);
@@ -166,5 +146,4 @@ private:
     void UpdateAnimation(float deltaTime);
     std::vector<SDL_Texture*>& GetCurrentAnimationFrames();
     int GetCurrentAnimationFrameCount() const;
-    void MeleeAttack();
 };

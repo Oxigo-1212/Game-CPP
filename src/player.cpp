@@ -1,16 +1,16 @@
 #include "include/Player.h"
 #include "include/Bullet.h"
 #include "include/Camera.h"
+#include "include/WeaponConfig.h"
 #include <iostream>
 #include <cmath>
 
-Player::Player(SDL_Renderer* renderer, float startX, float startY) 
-    : renderer(renderer), x(startX), y(startY), speed(200.0f),
+Player::Player(SDL_Renderer* renderer, WaveManager* waveManager, UI* ui, float startX, float startY) 
+    : renderer(renderer), waveManager(waveManager), ui(ui), x(startX), y(startY), speed(200.0f),
     currentFrame(0), frameTimer(0), frameDuration(DEFAULT_FRAME_DURATION),
-    rotation(0.0f), mouseX(0), mouseY(0), shootTimer(0.0f), meleeTimer(0.0f),
-    isMeleeing(false), currentState(PlayerState::IDLE),
-    currentWeapon(WeaponType::PISTOL), isMouseDown(false), isReloading(false), 
-    reloadTimer(0.0f), pistolAmmo(PISTOL_MAX_AMMO), rifleAmmo(RIFLE_MAX_AMMO), shotgunAmmo(SHOTGUN_MAX_AMMO),
+    rotation(0.0f), mouseX(0), mouseY(0), shootTimer(0.0f),
+    currentState(PlayerState::IDLE), currentWeapon(WeaponType::PISTOL), isMouseDown(false), isReloading(false), 
+    reloadTimer(0.0f), pistolAmmo(WeaponConfig::Pistol::MAX_AMMO), rifleAmmo(WeaponConfig::Rifle::MAX_AMMO), shotgunAmmo(WeaponConfig::Shotgun::MAX_AMMO),
     currentHealth(STARTING_HEALTH) {
     
     // Initialize key states
@@ -21,7 +21,8 @@ Player::Player(SDL_Renderer* renderer, float startX, float startY)
     // Initialize random seed for shotgun spread
     srand(static_cast<unsigned>(time(nullptr)));
 
-    // Set up source and destination rectangles    srcRect = {0, 0, 0, 0};
+    // Set up source and destination rectangles    
+    srcRect = {0, 0, 0, 0};
     destRect = {0, 0, 48, 48}; // Player size reduced from 64x64 to 48x48 pixels
 
     // First load all weapon animations
@@ -32,7 +33,6 @@ Player::Player(SDL_Renderer* renderer, float startX, float startY)
     moveFrames = moveAnimations[currentWeapon];
     shootFrames = shootAnimations[currentWeapon];
     reloadFrames = reloadAnimations[currentWeapon];
-    meleeFrames = meleeAnimations[currentWeapon];
 }
 
 Player::~Player() {
@@ -42,15 +42,12 @@ Player::~Player() {
             if (tex) SDL_DestroyTexture(tex);
         }
         frames.clear();
-    };
-
-    // Clean up all weapon animations
+    };    // Clean up all weapon animations
     for (WeaponType weapon : {WeaponType::PISTOL, WeaponType::RIFLE, WeaponType::SHOTGUN}) {
         cleanupFrames(idleAnimations[weapon]);
         cleanupFrames(moveAnimations[weapon]);
         cleanupFrames(shootAnimations[weapon]);
         cleanupFrames(reloadAnimations[weapon]);
-        cleanupFrames(meleeAnimations[weapon]);
     }
 
     // Clean up bullets
@@ -123,7 +120,6 @@ void Player::LoadWeaponAnimations(SDL_Renderer* renderer, WeaponType weapon) {
         LoadAnimationSet(renderer, moveAnimations[weapon], weaponPath + "move/survivor-move_" + weaponSuffix, MOVE_FRAME_COUNT);
         LoadAnimationSet(renderer, shootAnimations[weapon], weaponPath + "shoot/survivor-shoot_" + weaponSuffix, SHOOT_FRAME_COUNT);
         LoadAnimationSet(renderer, reloadAnimations[weapon], weaponPath + "reload/survivor-reload_" + weaponSuffix, RELOAD_FRAME_COUNT);
-        LoadAnimationSet(renderer, meleeAnimations[weapon], weaponPath + "meleeattack/survivor-meleeattack_" + weaponSuffix, MELEE_FRAME_COUNT);
     } catch (const std::exception& e) {
         std::cerr << "Error loading animations for " << weaponPath << ": " << e.what() << std::endl;
     }
@@ -139,7 +135,6 @@ std::vector<SDL_Texture*>& Player::GetCurrentAnimationFrames() {
         case PlayerState::MOVING: return moveFrames;
         case PlayerState::SHOOTING: return shootFrames;
         case PlayerState::RELOADING: return reloadFrames;
-        case PlayerState::MELEE: return meleeFrames;
         case PlayerState::IDLE:
         default: return idleFrames;
     }
@@ -150,7 +145,6 @@ int Player::GetCurrentAnimationFrameCount() const {
         case PlayerState::MOVING: return MOVE_FRAME_COUNT;
         case PlayerState::SHOOTING: return SHOOT_FRAME_COUNT;
         case PlayerState::RELOADING: return RELOAD_FRAME_COUNT;
-        case PlayerState::MELEE: return MELEE_FRAME_COUNT;
         case PlayerState::IDLE:
         default: return IDLE_FRAME_COUNT;
     }
@@ -165,23 +159,17 @@ void Player::UpdateAnimation(float deltaTime) {
         if (frameCount > 0) {
             currentFrame = (currentFrame + 1) % frameCount;
 
-            // If we complete a shooting/reloading/melee animation, return to idle
+            // If we complete a shooting/reloading animation, return to idle
             if (currentFrame == 0) { // Animation cycle completed
                 if (currentState == PlayerState::SHOOTING ||
                     currentState == PlayerState::RELOADING) {
                     currentState = PlayerState::IDLE;
-                } else if (currentState == PlayerState::MELEE) {
-                    currentState = PlayerState::IDLE;
-                    isMeleeing = false; // Reset isMeleeing flag
                 }
             }
         } else {
             // If current animation has no frames, revert to IDLE and set frame to 0
             currentFrame = 0;
-            if (currentState != PlayerState::IDLE) { // Avoid issues if IDLE itself has 0 frames
-                if (currentState == PlayerState::MELEE) {
-                    isMeleeing = false; // Also reset here if melee had 0 frames
-                }
+            if (currentState != PlayerState::IDLE) {
                 currentState = PlayerState::IDLE;
             }
         }
@@ -191,57 +179,41 @@ void Player::UpdateAnimation(float deltaTime) {
 void Player::HandleInput(SDL_Event& event) {
     switch (event.type) {
         case SDL_KEYDOWN:
-            keyStates[event.key.keysym.scancode] = true;
-            if (event.key.keysym.scancode == SDL_SCANCODE_R && !isReloading) {
-                // Start reload if not at max ammo
-                bool needsReload = false;
-                switch (currentWeapon) {
-                    case WeaponType::PISTOL:
-                        needsReload = pistolAmmo < PISTOL_MAX_AMMO;
-                        break;
-                    case WeaponType::RIFLE:
-                        needsReload = rifleAmmo < RIFLE_MAX_AMMO;
-                        break;
-                    case WeaponType::SHOTGUN:
-                        needsReload = shotgunAmmo < SHOTGUN_MAX_AMMO;
-                        break;
+            if (event.key.keysym.scancode < SDL_NUM_SCANCODES) {
+                keyStates[event.key.keysym.scancode] = true;
+
+                // Handle weapon switching
+                if (event.key.keysym.scancode == SDL_SCANCODE_1) {
+                    SwitchWeapon(WeaponType::PISTOL);
                 }
-                if (needsReload) {
-                    isReloading = true;
-                    reloadTimer = GetCurrentReloadTime();
-                    currentState = PlayerState::RELOADING;
-                    currentFrame = 0;
+                else if (event.key.keysym.scancode == SDL_SCANCODE_2) {
+                    SwitchWeapon(WeaponType::RIFLE);
                 }
-            }
-            // Weapon switching
-            else if (event.key.keysym.scancode == SDL_SCANCODE_1) {
-                SwitchWeapon(WeaponType::PISTOL);
-            }
-            else if (event.key.keysym.scancode == SDL_SCANCODE_2) {
-                SwitchWeapon(WeaponType::RIFLE);
-            }
-            else if (event.key.keysym.scancode == SDL_SCANCODE_3) {
-                SwitchWeapon(WeaponType::SHOTGUN);
+                else if (event.key.keysym.scancode == SDL_SCANCODE_3) {
+                    SwitchWeapon(WeaponType::SHOTGUN);
+                }
+                // Handle reload
+                else if (event.key.keysym.scancode == SDL_SCANCODE_R) {
+                    if (!isReloading && GetCurrentAmmo() < GetMaxAmmo()) {
+                        currentState = PlayerState::RELOADING;
+                        isReloading = true;
+                        reloadTimer = GetCurrentReloadTime();
+                        currentFrame = 0;  // Reset animation frame
+                        frameTimer = 0;    // Reset frame timer
+                    }
+                }
             }
             break;
 
         case SDL_KEYUP:
-            keyStates[event.key.keysym.scancode] = false;
+            if (event.key.keysym.scancode < SDL_NUM_SCANCODES) {
+                keyStates[event.key.keysym.scancode] = false;
+            }
             break;
 
         case SDL_MOUSEBUTTONDOWN:
-            if (event.button.button == SDL_BUTTON_LEFT && !isReloading) {
+            if (event.button.button == SDL_BUTTON_LEFT) {
                 isMouseDown = true;
-                // Try to shoot immediately when button is pressed
-                if (shootTimer <= 0 && GetCurrentAmmo() > 0) {
-                    Shoot();
-                }
-            }
-            else if (event.button.button == SDL_BUTTON_RIGHT) {
-                if (!isReloading && meleeTimer <= 0 && !isMeleeing) {
-                    MeleeAttack();
-                    meleeTimer = MELEE_COOLDOWN;
-                }
             }
             break;
 
@@ -269,37 +241,33 @@ void Player::UpdateMousePosition(int worldMouseX, int worldMouseY) {
 }
 
 void Player::Update(float deltaTime) {
+    // Handle automatic shooting when mouse is held down
+    if (isMouseDown) {
+        if (shootTimer <= 0 && !isReloading && GetCurrentAmmo() > 0) {
+            Shoot();
+            shootTimer = GetCurrentFireRate();
+        }
+    }
+
     // Update timers
     if (shootTimer > 0) {
         shootTimer -= deltaTime;
     }
-    
-    if (meleeTimer > 0) {
-        meleeTimer -= deltaTime;
-    }
 
-    // Handle automatic weapon fire
-    if (isMouseDown && !isReloading && shootTimer <= 0) {
-        if ((currentWeapon == WeaponType::RIFLE && rifleAmmo > 0) ||
-            (currentWeapon == WeaponType::SHOTGUN && shotgunAmmo > 0)) {
-            Shoot();
-        }
-    }
-
-    // Handle reload timer
+    // Handle reloading
     if (isReloading) {
         reloadTimer -= deltaTime;
         if (reloadTimer <= 0) {
             isReloading = false;
-            switch (currentWeapon) {
-                case WeaponType::PISTOL:
-                    pistolAmmo = PISTOL_MAX_AMMO;
+            // Refill ammo
+            switch (currentWeapon) {                case WeaponType::PISTOL:
+                    pistolAmmo = WeaponConfig::Pistol::MAX_AMMO;
                     break;
                 case WeaponType::RIFLE:
-                    rifleAmmo = RIFLE_MAX_AMMO;
+                    rifleAmmo = WeaponConfig::Rifle::MAX_AMMO;
                     break;
                 case WeaponType::SHOTGUN:
-                    shotgunAmmo = SHOTGUN_MAX_AMMO;
+                    shotgunAmmo = WeaponConfig::Shotgun::MAX_AMMO;
                     break;
             }
             if (currentState == PlayerState::RELOADING) {
@@ -308,15 +276,10 @@ void Player::Update(float deltaTime) {
         }
     }
 
-    // Reset melee state if needed
-    if (isMeleeing && currentState != PlayerState::MELEE) {
-        isMeleeing = false;
-    }
-
     float moveX = 0.0f;
     float moveY = 0.0f;
 
-    // Player can now move while reloading or meleeing
+    // Player can move while reloading 
     if (keyStates[SDL_SCANCODE_W]) {
         moveY -= 1;
     }
@@ -331,45 +294,37 @@ void Player::Update(float deltaTime) {
     }
 
     // Normalize movement vector
-    float length = sqrt(moveX * moveX + moveY * moveY);
-    if (length > 0) {
+    if (moveX != 0 || moveY != 0) {
+        float length = sqrt(moveX * moveX + moveY * moveY);
         moveX /= length;
         moveY /= length;
-        // If not performing a higher priority action, set state to MOVING
-        if (!isReloading && !isMeleeing && currentState != PlayerState::SHOOTING && currentState != PlayerState::RELOADING && currentState != PlayerState::MELEE) {
+
+        x += moveX * speed * deltaTime;
+        y += moveY * speed * deltaTime;
+
+        // Update animation state if not in a priority state
+        if (currentState == PlayerState::IDLE) {
             currentState = PlayerState::MOVING;
         }
-    } else {
-        // If not moving and not performing a higher priority action, set state to IDLE
-        if (!isReloading && !isMeleeing && currentState != PlayerState::SHOOTING && currentState != PlayerState::RELOADING && currentState != PlayerState::MELEE) {
-            currentState = PlayerState::IDLE;
-        }
     }
-
-    // Update player position
-    x += moveX * speed * deltaTime;
-    y += moveY * speed * deltaTime;
-
-    // Update destRect for rendering based on new x, y (world coordinates)
-    // The camera will handle the offset for screen coordinates in Render()
-    destRect.x = static_cast<int>(x - destRect.w / 2.0f); // x is center
-    destRect.y = static_cast<int>(y - destRect.h / 2.0f); // y is center
+    else if (currentState == PlayerState::MOVING) {
+        currentState = PlayerState::IDLE;
+    }
 
     // Update animation
     UpdateAnimation(deltaTime);
 
     // Update bullets
-    for (auto it = bullets.begin(); it != bullets.end();) {
-        Bullet* bullet = *it;
-        bullet->Update(deltaTime);
-        
-        if (!bullet->IsActive()) {
-            delete bullet;
-            it = bullets.erase(it);
-        } else {
-            ++it;
-        }
-    }
+    UpdateBullets(deltaTime, nullptr);  // nullptr because we don't need camera for bullet updates
+
+    // Update rotation based on mouse position
+    float dx = mouseX - x;
+    float dy = mouseY - y;
+    rotation = (atan2(dy, dx) * 180.0f / M_PI);
+
+    // Update destination rectangle position
+    destRect.x = static_cast<int>(x - destRect.w / 2);
+    destRect.y = static_cast<int>(y - destRect.h / 2);
 }
 
 void Player::Shoot() {
@@ -420,17 +375,17 @@ void Player::Shoot() {
     float rotationRad = rotation * M_PI / 180.0f;
     float muzzleX = x + (muzzleOffsetX * cos(rotationRad)) - (muzzleOffsetY * sin(rotationRad));
     float muzzleY = y + (muzzleOffsetX * sin(rotationRad)) + (muzzleOffsetY * cos(rotationRad));
-    
-    if (currentWeapon == WeaponType::SHOTGUN) {
+      if (currentWeapon == WeaponType::SHOTGUN) {
         // Create multiple pellets with spread
-        for (int i = 0; i < SHOTGUN_PELLETS; i++) {
-            float spreadAngle = rotation + (((float)rand() / RAND_MAX) * SHOTGUN_SPREAD - SHOTGUN_SPREAD / 2);
-            Bullet* pellet = new Bullet(renderer, muzzleX, muzzleY, spreadAngle);
+        for (int i = 0; i < WeaponConfig::Shotgun::PELLET_COUNT; i++) {
+            float spreadAngle = rotation + (((float)rand() / RAND_MAX) * WeaponConfig::Shotgun::SPREAD_ANGLE - WeaponConfig::Shotgun::SPREAD_ANGLE / 2);
+            Bullet* pellet = new Bullet(renderer, muzzleX, muzzleY, spreadAngle, BulletType::SHOTGUN_PELLET);
             bullets.push_back(pellet);
         }
     } else {
         // Single bullet for other weapons
-        Bullet* bullet = new Bullet(renderer, muzzleX, muzzleY, rotation);
+        BulletType bulletType = (currentWeapon == WeaponType::RIFLE) ? BulletType::RIFLE : BulletType::PISTOL;
+        Bullet* bullet = new Bullet(renderer, muzzleX, muzzleY, rotation, bulletType);
         bullets.push_back(bullet);
     }
 
@@ -458,13 +413,23 @@ void Player::Shoot() {
 }
 
 void Player::SwitchWeapon(WeaponType weapon) {
+    // Check if weapon is unlocked
+    if (weapon == WeaponType::RIFLE && !waveManager->IsRifleUnlocked()) {
+        ui->ShowNotification("Rifle is locked! Unlock it by reaching wave " + std::to_string(WaveConfig::RIFLE_UNLOCK_WAVE));
+        return;
+    }
+    if (weapon == WeaponType::SHOTGUN && !waveManager->IsShotgunUnlocked()) {
+        ui->ShowNotification("Shotgun is locked! Unlock it by reaching wave " + std::to_string(WaveConfig::SHOTGUN_UNLOCK_WAVE));
+        return;
+    }
+
     if (isReloading || currentWeapon == weapon) return;
     currentWeapon = weapon;
     shootTimer = 0;
     currentState = PlayerState::IDLE;
     currentFrame = 0;
     
-    // Just update animation references since all animations are preloaded
+    // Update animation references
     UpdateAnimationReferences();
 }
 
@@ -483,49 +448,36 @@ int Player::GetCurrentAmmo() const {
 int Player::GetMaxAmmo() const {
     switch (currentWeapon) {
         case WeaponType::RIFLE:
-            return RIFLE_MAX_AMMO;
+            return WeaponConfig::Rifle::MAX_AMMO;
         case WeaponType::SHOTGUN:
-            return SHOTGUN_MAX_AMMO;
+            return WeaponConfig::Shotgun::MAX_AMMO;
         case WeaponType::PISTOL:
         default:
-            return PISTOL_MAX_AMMO;
+            return WeaponConfig::Pistol::MAX_AMMO;
     }
 }
 
 float Player::GetCurrentFireRate() const {
     switch (currentWeapon) {
         case WeaponType::RIFLE:
-            return RIFLE_FIRE_RATE;
+            return WeaponConfig::Rifle::FIRE_RATE;
         case WeaponType::SHOTGUN:
-            return SHOTGUN_FIRE_RATE;
+            return WeaponConfig::Shotgun::FIRE_RATE;
         case WeaponType::PISTOL:
         default:
-            return PISTOL_FIRE_RATE;
+            return WeaponConfig::Pistol::FIRE_RATE;
     }
 }
 
 float Player::GetCurrentReloadTime() const {
     switch (currentWeapon) {
         case WeaponType::RIFLE:
-            return RIFLE_RELOAD_TIME;
+            return WeaponConfig::Rifle::RELOAD_TIME;
         case WeaponType::SHOTGUN:
-            return SHOTGUN_RELOAD_TIME;
+            return WeaponConfig::Shotgun::RELOAD_TIME;
         case WeaponType::PISTOL:
         default:
-            return PISTOL_RELOAD_TIME;
-    }
-}
-
-void Player::MeleeAttack() {
-    // Switch to melee state and reset animation
-    currentState = PlayerState::MELEE;
-    currentFrame = 0;
-    frameTimer = 0;
-    isMeleeing = true;
-
-    // Load knife melee animation if not already loaded
-    if (meleeFrames.empty()) {
-        LoadAnimationSet(renderer, meleeFrames, "assets/player/knife/meleeattack/survivor-meleeattack_knife_", MELEE_FRAME_COUNT);
+            return WeaponConfig::Pistol::RELOAD_TIME;
     }
 }
 
@@ -662,12 +614,10 @@ bool Player::VerifyAnimationLoading(const std::string& weaponPath, WeaponType we
         }
     };
 
-    // Verify all animation sets for this weapon
-    verifyAnimationSet(idleAnimations[weapon], "idle", IDLE_FRAME_COUNT);
+    // Verify all animation sets for this weapon    verifyAnimationSet(idleAnimations[weapon], "idle", IDLE_FRAME_COUNT);
     verifyAnimationSet(moveAnimations[weapon], "move", MOVE_FRAME_COUNT);
     verifyAnimationSet(shootAnimations[weapon], "shoot", SHOOT_FRAME_COUNT);
     verifyAnimationSet(reloadAnimations[weapon], "reload", RELOAD_FRAME_COUNT);
-    verifyAnimationSet(meleeAnimations[weapon], "melee", MELEE_FRAME_COUNT);
 
     return success;
 }
@@ -697,8 +647,7 @@ void Player::UpdateAnimationReferences() {
     if (idleAnimations.find(currentWeapon) == idleAnimations.end() ||
         moveAnimations.find(currentWeapon) == moveAnimations.end() ||
         shootAnimations.find(currentWeapon) == shootAnimations.end() ||
-        reloadAnimations.find(currentWeapon) == reloadAnimations.end() ||
-        meleeAnimations.find(currentWeapon) == meleeAnimations.end()) {
+        reloadAnimations.find(currentWeapon) == reloadAnimations.end()) {
         std::cerr << "Warning: Missing animations for current weapon. Falling back to pistol." << std::endl;
         currentWeapon = WeaponType::PISTOL;
     }
@@ -708,5 +657,4 @@ void Player::UpdateAnimationReferences() {
     moveFrames = moveAnimations[currentWeapon];
     shootFrames = shootAnimations[currentWeapon];
     reloadFrames = reloadAnimations[currentWeapon];
-    meleeFrames = meleeAnimations[currentWeapon];
 }

@@ -11,6 +11,7 @@ private:    // Constants
     static constexpr int BAR_WIDTH = 200;
     static constexpr int BAR_HEIGHT = 20;
     static constexpr int TEXT_SPACING = 5;
+    static constexpr float NOTIFICATION_DURATION = 3.0f;  // How long notifications stay on screen
 
     SDL_Renderer* renderer;
     TTF_Font* font;
@@ -24,6 +25,12 @@ private:    // Constants
     SDL_Texture* healthTexture;
     SDL_Rect healthRect;
 
+    // Notification system
+    std::string notificationText;
+    float notificationTimer;
+    SDL_Texture* notificationTexture;
+    SDL_Rect notificationRect;
+
 public:
     UI(SDL_Renderer* renderer);
     ~UI();
@@ -31,10 +38,13 @@ public:
     bool Initialize();
     void Cleanup();
     void Render(int currentHealth, int maxHealth, int currentAmmo, int maxAmmo);
+    void ShowNotification(const std::string& text);
+    void UpdateNotification(float deltaTime);
 
 private:
     void RenderHealthBar(int currentHealth, int maxHealth);
     void RenderAmmoCounter(int currentAmmo, int maxAmmo);
     SDL_Texture* CreateTextTexture(const std::string& text);
     void UpdateTextTextures(int currentHealth, int maxHealth, int currentAmmo, int maxAmmo);
+    void RenderNotification();
 };

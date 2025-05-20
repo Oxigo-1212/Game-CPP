@@ -10,7 +10,8 @@ Game::Game() :
     window(nullptr), 
     renderer(nullptr),
     previousTime(0),
-    accumulator(0.0f),    FPS(60),
+    accumulator(0.0f),
+    FPS(60),
     FRAME_TIME(1000 / FPS),
     FIXED_TIME_STEP(1.0f / 60.0f),
     player(nullptr),
@@ -18,13 +19,7 @@ Game::Game() :
     camera(nullptr),
     chunkManager(nullptr),
     zombiePool(nullptr),
-    currentWave(0),
-    zombiesRemainingInWave(0),
-    spawnTimer(0),
-    timeBetweenSpawns(INITIAL_SPAWN_DELAY),
-    waveDelay(WAVE_DELAY),
-    waveTimer(0),
-    waveInProgress(false) {
+    waveManager(nullptr) {
     std::srand(static_cast<unsigned>(std::time(nullptr)));
 }
 
@@ -67,8 +62,8 @@ bool Game::Initialize() {
         return false;
     }
 
-    // Create player instance
-    player = new Player(renderer); 
+    // Create WaveManager first since Player needs it
+    waveManager = new WaveManager();
     
     // Create and initialize UI
     ui = new UI(renderer);
@@ -76,6 +71,9 @@ bool Game::Initialize() {
         std::cerr << "UI initialization failed" << std::endl;
         return false;
     }
+    
+     // Create player instance with WaveManager and UI
+    player = new Player(renderer, waveManager, ui);
 
     // Create camera instance BEFORE ChunkManager if ChunkManager needs player/camera info indirectly
     // For now, player is enough for camera initial position.
@@ -96,10 +94,8 @@ bool Game::Initialize() {
         return false;
     }
 
-    // Initialize wave system instead of spawning a single zombie
-    currentWave = 0;
-    waveInProgress = false;
-    waveTimer = 0;
+    // Start first wave
+    waveManager->StartNextWave();
 
     isRunning = true;
     previousTime = SDL_GetTicks();
@@ -134,8 +130,34 @@ void Game::Update(float deltaTime) {
         }
     }
 
-    // Update wave system
-    UpdateWaveState(deltaTime);
+    // Update wave manager
+    if (waveManager) {
+        waveManager->Update(deltaTime);
+        
+        // Check for weapon unlocks
+        if (waveManager->HasNewWeaponUnlock()) {
+            if (waveManager->GetCurrentWave() == WaveConfig::RIFLE_UNLOCK_WAVE) {
+                ui->ShowNotification("Rifle Unlocked! Press 2 to equip");
+            } else if (waveManager->GetCurrentWave() == WaveConfig::SHOTGUN_UNLOCK_WAVE) {
+                ui->ShowNotification("Shotgun Unlocked! Press 3 to equip");
+            }
+            waveManager->AcknowledgeWeaponUnlock();
+        }
+        
+        // Spawn entire group at once
+        if (waveManager->ShouldSpawnZombie()) {
+            // Spawn as many zombies as the current group size indicates
+            int groupSize = waveManager->GetCurrentGroupSize();
+            for (int i = 0; i < groupSize; i++) {
+                SpawnZombie();
+            }
+        }
+    }
+
+    // Update UI notifications
+    if (ui) {
+        ui->UpdateNotification(deltaTime);
+    }
 
     // Update zombies through the pool
     if (zombiePool) {
@@ -155,9 +177,8 @@ void Game::Update(float deltaTime) {
             SDL_Rect bulletRect = bullet->GetHitbox();
             SDL_Point bulletPos = { static_cast<int>(bullet->GetX()), static_cast<int>(bullet->GetY()) };
             
-            for (Zombie* zombie : zombiePool->GetActiveZombies()) {
-                if (!zombie->IsDead() && zombie->CheckCollisionWithBullet(bullet)) {
-                    zombie->TakeDamage();
+            for (Zombie* zombie : zombiePool->GetActiveZombies()) {                if (!zombie->IsDead() && zombie->CheckCollisionWithBullet(bullet)) {
+                    // Note: TakeDamage is now handled inside CheckCollisionWithBullet
                     bullet->Deactivate();
                     hitZombie = true;
                     break;
@@ -184,78 +205,68 @@ void Game::Update(float deltaTime) {
     }
 }
 
-void Game::UpdateWaveState(float deltaTime) {
-    if (!waveInProgress) {
-        waveTimer += deltaTime;
-        if (waveTimer >= waveDelay) {
-            // Start new wave
-            currentWave++;
-            zombiesRemainingInWave = BASE_ZOMBIES_PER_WAVE + (currentWave - 1) * 2;
-            waveInProgress = true;
-            spawnTimer = 0;
-            timeBetweenSpawns = std::max(
-                MIN_SPAWN_DELAY,
-                INITIAL_SPAWN_DELAY - (currentWave - 1) * SPAWN_DELAY_DECREASE
-            );
-            std::cout << "Wave " << currentWave << " started! Zombies: " << zombiesRemainingInWave << std::endl;
-        }
-    } else {
-        if (zombiesRemainingInWave > 0) {
-            spawnTimer += deltaTime;
-            if (spawnTimer >= timeBetweenSpawns) {
-                SpawnZombie();
-                spawnTimer = 0;
-            }        } else {
-            // Check if all active zombies are dead
-            bool allZombiesDead = true;
-            if (zombiePool) {
-                for (Zombie* zombie : zombiePool->GetActiveZombies()) {
-                    if (!zombie->IsDead()) {
-                        allZombiesDead = false;
-                        break;
-                    }
-                }
-            }
-
-            if (allZombiesDead) {
-                waveTimer = 0;
-                waveInProgress = false;
-                std::cout << "Wave " << currentWave << " completed! Next wave in " << WAVE_DELAY << " seconds" << std::endl;
-            }
-        }
-    }
-}
-
 SDL_Point Game::GetRandomSpawnPosition() const {
     if (!player) return {0, 0};
 
-    // Get random angle
-    float angle = static_cast<float>(rand()) / RAND_MAX * 2 * M_PI;
+    static std::vector<SDL_Point> spawnPoints;
+    static int currentSpawnPoint = 0;
+
+    // Generate new spawn points if we're starting a new group
+    if (spawnPoints.empty()) {
+        float playerX = player->GetX();
+        float playerY = player->GetY();
+
+        // Create several spawn points around the player
+        for (int i = 0; i < WaveConfig::SPAWN_POINTS; i++) {
+            // Evenly distribute spawn points around the player
+            float angle = (2.0f * M_PI * i) / WaveConfig::SPAWN_POINTS;
+            
+            // Get random distance between MIN and MAX spawn distance
+            float distance = MIN_SPAWN_DISTANCE + 
+                (static_cast<float>(rand()) / RAND_MAX * (MAX_SPAWN_DISTANCE - MIN_SPAWN_DISTANCE));
+            
+            spawnPoints.push_back({
+                static_cast<int>(playerX + cos(angle) * distance),
+                static_cast<int>(playerY + sin(angle) * distance)
+            });
+        }
+    }    // Pick a spawn point and get a random position around it
+    SDL_Point basePoint = spawnPoints[currentSpawnPoint];
     
-    // Get random distance between MIN and MAX spawn distance
-    float distance = MIN_SPAWN_DISTANCE + 
-        (static_cast<float>(rand()) / RAND_MAX * (MAX_SPAWN_DISTANCE - MIN_SPAWN_DISTANCE));
+    // Get a random offset within the group spawn radius
+    float groupAngle = static_cast<float>(rand()) / RAND_MAX * 2 * M_PI;
+    float groupRadius = static_cast<float>(rand()) / RAND_MAX * WaveConfig::GROUP_SPAWN_RADIUS;
     
-    // Calculate spawn position relative to player
-    float playerX = player->GetX();
-    float playerY = player->GetY();
-    
-    return {
-        static_cast<int>(playerX + cos(angle) * distance),
-        static_cast<int>(playerY + sin(angle) * distance)
+    SDL_Point groupPos = {
+        static_cast<int>(basePoint.x + cos(groupAngle) * groupRadius),
+        static_cast<int>(basePoint.y + sin(groupAngle) * groupRadius)
     };
+    
+    // Cycle through spawn points
+    currentSpawnPoint = (currentSpawnPoint + 1) % WaveConfig::SPAWN_POINTS;
+    
+    // Clear spawn points when we've used them all
+    if (currentSpawnPoint == 0) {
+        spawnPoints.clear();
+    }
+    
+    return groupPos;
 }
 
 void Game::SpawnZombie() {
-    if (zombiesRemainingInWave <= 0 || !zombiePool) return;
+    if (!zombiePool || !waveManager) return;
 
     SDL_Point spawnPos = GetRandomSpawnPosition();
     Zombie* zombie = zombiePool->GetZombie();
     if (zombie) {
-        zombie->Reset(static_cast<float>(spawnPos.x), static_cast<float>(spawnPos.y));
-        zombiesRemainingInWave--;
+        // Add random speed variation
+        float speedMultiplier = 1.0f - WaveConfig::SPEED_VARIATION + 
+            (static_cast<float>(rand()) / RAND_MAX * (WaveConfig::SPEED_VARIATION * 2));
+            
+        zombie->Reset(static_cast<float>(spawnPos.x), static_cast<float>(spawnPos.y), speedMultiplier);
         std::cout << "Spawned zombie at (" << spawnPos.x << ", " << spawnPos.y 
-                  << "). Remaining in wave: " << zombiesRemainingInWave << std::endl;
+                  << ") with speed multiplier " << speedMultiplier << std::endl;
+        waveManager->OnZombieSpawned();
     } else {
         std::cerr << "Failed to get zombie from pool" << std::endl;
     }
@@ -320,6 +331,11 @@ void Game::Cleanup() {
             std::cerr << "Error cleaning up zombie pool: " << e.what() << std::endl;
         }
         zombiePool = nullptr;
+    }
+
+    if (waveManager) {
+        delete waveManager;
+        waveManager = nullptr;
     }
 
     if (player) {

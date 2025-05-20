@@ -4,8 +4,9 @@
 
 Zombie::Zombie(SDL_Renderer* renderer, float startX, float startY) 
     : renderer(renderer), x(startX), y(startY), rotation(0.0f),
-      health(5), isDead(false), speed(100.0f), isAttacking(false), lastAttackTime(0),
-      currentFrame(0), frameTimer(0.0f), frameDuration(DEFAULT_FRAME_DURATION) {
+      health(STARTING_HEALTH), isDead(false), speed(100.0f), isAttacking(false), lastAttackTime(0),
+      currentFrame(0), frameTimer(0.0f), frameDuration(DEFAULT_FRAME_DURATION),
+      knockbackVelocityX(0.0f), knockbackVelocityY(0.0f), knockbackDuration(0.0f) {
     
     // Initialize hitbox
     hitbox.w = 50;  // width of zombie
@@ -91,6 +92,27 @@ void Zombie::UpdateAnimation(float deltaTime) {
 void Zombie::Update(float deltaTime, Player* player, const std::vector<Zombie*>& zombies) {
     if (isDead) return;
 
+    // Handle knockback effect
+    if (knockbackDuration > 0) {
+        x += knockbackVelocityX * deltaTime;
+        y += knockbackVelocityY * deltaTime;
+        knockbackDuration -= deltaTime;
+        
+        // Update hitbox during knockback
+        hitbox.x = static_cast<int>(x - hitbox.w / 2);
+        hitbox.y = static_cast<int>(y - hitbox.h / 2);
+        
+        // If knockback is done, reset velocities
+        if (knockbackDuration <= 0) {
+            knockbackVelocityX = 0;
+            knockbackVelocityY = 0;
+        }
+        
+        // Still update animation even during knockback
+        UpdateAnimation(deltaTime);
+        return;  // Skip normal movement while being knocked back
+    }
+
     // Get player position and calculate direction
     float playerX = player->GetX();
     float playerY = player->GetY();
@@ -173,11 +195,10 @@ void Zombie::Update(float deltaTime, Player* player, const std::vector<Zombie*>&
     // Update attack state
     bool wasAttacking = isAttacking;
     if (CheckCollisionWithPlayer(player)) {
-        Uint32 currentTime = SDL_GetTicks();
-        if (currentTime - lastAttackTime >= ATTACK_COOLDOWN) {
+        Uint32 currentTime = SDL_GetTicks();            if (currentTime - lastAttackTime >= ATTACK_COOLDOWN) {
             isAttacking = true;
             lastAttackTime = currentTime;
-            player->TakeDamage(10);
+            player->TakeDamage(WaveConfig::ZOMBIE_BASE_DAMAGE);
             if (!wasAttacking) {
                 // Reset animation when starting to attack
                 currentFrame = 0;
@@ -258,7 +279,18 @@ bool Zombie::CheckCollisionWithBullet(Bullet* bullet) {
     if (isDead) return false;
     
     SDL_Rect bulletHitbox = bullet->GetHitbox();
-    return SDL_HasIntersection(&hitbox, &bulletHitbox);
+    if (SDL_HasIntersection(&hitbox, &bulletHitbox)) {
+        // Calculate direction from bullet to zombie for knockback
+        float dx = x - bullet->GetX();
+        float dy = y - bullet->GetY();
+        
+        // Use bullet type to determine damage and knockback
+        bool isShotgunPellet = (bullet->GetBulletType() == BulletType::SHOTGUN_PELLET);
+          // Apply damage with knockback in the direction of the bullet's travel
+        TakeDamageWithKnockback(dx, dy, isShotgunPellet, bullet);
+        return true;
+    }
+    return false;
 }
 
 bool Zombie::CheckCollisionWithPlayer(Player* player) {
@@ -272,6 +304,35 @@ void Zombie::TakeDamage() {
     if (isDead) return;
     
     health--;
+    if (health <= 0) {
+        isDead = true;
+    }
+}
+
+void Zombie::TakeDamageWithKnockback(float damageX, float damageY, bool isShotgunPellet, Bullet* bullet) {
+    // Only apply knockback for shotgun pellets
+    if (isShotgunPellet) {
+        float force = WeaponConfig::Shotgun::KNOCKBACK_FORCE * WeaponConfig::Shotgun::KNOCKBACK_MULTIPLIER;
+        
+        // Calculate knockback direction
+        float length = std::sqrt(damageX * damageX + damageY * damageY);
+        if (length > 0) {
+            knockbackVelocityX = (damageX / length) * force;
+            knockbackVelocityY = (damageY / length) * force;
+        }
+        
+        // Set knockback duration
+        knockbackDuration = WeaponConfig::Shotgun::KNOCKBACK_DURATION;
+    }
+
+    // Apply appropriate damage based on weapon type
+    if (isShotgunPellet) {
+        health -= WeaponConfig::Shotgun::PELLET_DAMAGE;
+    } else if (bullet && bullet->GetBulletType() == BulletType::RIFLE) {
+        health -= WeaponConfig::Rifle::DAMAGE;
+    } else {
+        health -= WeaponConfig::Pistol::DAMAGE;
+    }
     if (health <= 0) {
         isDead = true;
     }
@@ -402,17 +463,20 @@ void Zombie::Cohere(const std::vector<Zombie*>& zombies, float& dx, float& dy) {
     }
 }
 
-void Zombie::Reset(float newX, float newY) {
+void Zombie::Reset(float newX, float newY, float speedMultiplier) {
     x = newX;
     y = newY;
     rotation = 0.0f;
-    health = 5;
+    health = WaveConfig::ZOMBIE_BASE_HEALTH;
     isDead = false;
-    speed = 100.0f;
+    speed = WaveConfig::ZOMBIE_BASE_SPEED * speedMultiplier;
     isAttacking = false;
     lastAttackTime = 0;
     currentFrame = 0;
     frameTimer = 0.0f;
+    knockbackVelocityX = 0.0f;
+    knockbackVelocityY = 0.0f;
+    knockbackDuration = 0.0f;
     
     // Reset hitbox position
     hitbox.x = static_cast<int>(x - hitbox.w / 2);

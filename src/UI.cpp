@@ -4,10 +4,10 @@
 UI::UI(SDL_Renderer* renderer) : renderer(renderer), font(nullptr),
     textColor({255, 255, 255, 255}),         // White
     barFillColor({0, 255, 0, 255}),          // Green
-    barBackgroundColor({128, 128, 128, 255}) // Gray
+    barBackgroundColor({255, 0, 0, 255}),    // Red
+    ammoTexture(nullptr), healthTexture(nullptr), notificationTexture(nullptr),
+    notificationTimer(0.0f)
 {
-    ammoTexture = nullptr;
-    healthTexture = nullptr;
 }
 
 UI::~UI() {
@@ -39,6 +39,10 @@ void UI::Cleanup() {
     if (healthTexture) {
         SDL_DestroyTexture(healthTexture);
         healthTexture = nullptr;
+    }
+    if (notificationTexture) {
+        SDL_DestroyTexture(notificationTexture);
+        notificationTexture = nullptr;
     }
     if (font) {
         TTF_CloseFont(font);
@@ -120,6 +124,51 @@ void UI::RenderAmmoCounter(int currentAmmo, int maxAmmo) {
     }
 }
 
+void UI::ShowNotification(const std::string& text) {
+    notificationText = text;
+    notificationTimer = NOTIFICATION_DURATION;
+    
+    // Clean up old texture
+    if (notificationTexture) {
+        SDL_DestroyTexture(notificationTexture);
+    }
+    
+    // Create new texture
+    notificationTexture = CreateTextTexture(text);
+    if (notificationTexture) {
+        int w, h;
+        SDL_QueryTexture(notificationTexture, nullptr, nullptr, &w, &h);
+        notificationRect = {
+            (1280 - w) / 2,  // Center horizontally
+            100,             // Show near top of screen
+            w, h
+        };
+    }
+}
+
+void UI::UpdateNotification(float deltaTime) {
+    if (notificationTimer > 0) {
+        notificationTimer -= deltaTime;
+        if (notificationTimer <= 0) {
+            // Clean up notification
+            if (notificationTexture) {
+                SDL_DestroyTexture(notificationTexture);
+                notificationTexture = nullptr;
+            }
+            notificationText.clear();
+        }
+    }
+}
+
+void UI::RenderNotification() {
+    if (notificationTimer > 0 && notificationTexture) {
+        // Calculate alpha based on remaining time
+        int alpha = static_cast<int>(255 * std::min(1.0f, notificationTimer / NOTIFICATION_DURATION));
+        SDL_SetTextureAlphaMod(notificationTexture, alpha);
+        SDL_RenderCopy(renderer, notificationTexture, nullptr, &notificationRect);
+    }
+}
+
 void UI::Render(int currentHealth, int maxHealth, int currentAmmo, int maxAmmo) {
     UpdateTextTextures(currentHealth, maxHealth, currentAmmo, maxAmmo);
     
@@ -131,4 +180,7 @@ void UI::Render(int currentHealth, int maxHealth, int currentAmmo, int maxAmmo) 
     
     // Render ammo counter
     RenderAmmoCounter(currentAmmo, maxAmmo);
+
+    // Render notification on top
+    RenderNotification();
 }

@@ -10,6 +10,7 @@
 #include "ChunkManager.h" // Added ChunkManager include
 #include "Zombie.h" // Added Zombie include
 #include "ZombiePool.h" // Added ZombiePool include
+#include "WaveManager.h" // Added WaveManager include
 
 class Game {
 private:
@@ -32,6 +33,7 @@ private:
     float waveDelay;
     float waveTimer;
     bool waveInProgress;
+    WaveManager* waveManager;  // Added WaveManager pointer
 
     // Game objects
     Player* player;
@@ -39,14 +41,12 @@ private:
     Camera* camera; // Added camera member
     ChunkManager* chunkManager; // Added ChunkManager member
     ZombiePool* zombiePool; // Added ZombiePool member
-    std::vector<Zombie*> zombies; // Added zombies container
-
-    // Screen dimensions - consider moving to a Constants.h or config file
+    std::vector<Zombie*> zombies; // Added zombies container    // Screen dimensions - consider moving to a Constants.h or config file
     static constexpr int SCREEN_WIDTH = 1280;
     static constexpr int SCREEN_HEIGHT = 720;
 
-    // Constants
-    static constexpr int ZOMBIE_POOL_SIZE = 70; // Size of zombie pool
+    // Game constants
+    static constexpr int ZOMBIE_POOL_SIZE = 250; // Size of zombie pool
 
     // Wave constants
     static constexpr float INITIAL_SPAWN_DELAY = 2.0f; // Time between zombie spawns in seconds
