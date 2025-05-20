@@ -11,6 +11,7 @@
 #include "Zombie.h" // Added Zombie include
 #include "ZombiePool.h" // Added ZombiePool include
 #include "WaveManager.h" // Added WaveManager include
+#include "LoadingScreen.h" // Added LoadingScreen include
 
 class Game {
 private:
@@ -41,7 +42,10 @@ private:
     Camera* camera; // Added camera member
     ChunkManager* chunkManager; // Added ChunkManager member
     ZombiePool* zombiePool; // Added ZombiePool member
-    std::vector<Zombie*> zombies; // Added zombies container    // Screen dimensions - consider moving to a Constants.h or config file
+    std::vector<Zombie*> zombies; // Added zombies container
+    std::unique_ptr<LoadingScreen> loadingScreen; // Added LoadingScreen member
+
+    // Screen dimensions - consider moving to a Constants.h or config file
     static constexpr int SCREEN_WIDTH = 1280;
     static constexpr int SCREEN_HEIGHT = 720;
 
@@ -72,4 +76,6 @@ private:
     void SpawnZombie();
     void UpdateWaveState(float deltaTime);
     SDL_Point GetRandomSpawnPosition() const;
+    void InitializeGameState();  // Added declaration
+    void CleanupGameState();     // Added declaration
 };

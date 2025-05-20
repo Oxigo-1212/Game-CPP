@@ -21,6 +21,7 @@ public:
     void RecycleDistantZombies(Player* player, float maxDistance);
     void OptimizeZombieDistribution(Player* player);
     void PrewarmPool();
+    void AddZombie();  // New method for incremental creation
 
 private:
     static constexpr float RECYCLE_DISTANCE = 1200.0f;  // Distance at which zombies get recycled

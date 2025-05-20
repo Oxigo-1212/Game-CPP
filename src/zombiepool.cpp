@@ -4,66 +4,19 @@
 #include <stdexcept>
 #include <cmath>
 
-ZombiePool::ZombiePool(SDL_Renderer* renderer, size_t poolSize) : renderer(renderer) {
-    if (!renderer) {
-        throw std::runtime_error("ZombiePool: Null renderer provided");
-    }
-    
-    if (poolSize == 0 || poolSize > 1000) { // Sanity check on pool size
-        throw std::runtime_error("ZombiePool: Invalid pool size: " + std::to_string(poolSize));
-    }
+ZombiePool::ZombiePool(SDL_Renderer* renderer, size_t poolSize) 
+    : renderer(renderer) {
+    // Reserve space for our vectors
+    pool.reserve(poolSize);
+    activeZombies.reserve(poolSize);
+    isInUse.reserve(poolSize);
+}
 
-    std::cout << "ZombiePool: Starting initialization with " << poolSize << " zombies..." << std::endl;
-    
-    try {
-        // Pre-allocate vectors with exact size to prevent reallocation
-        pool.resize(poolSize, nullptr);
-        isInUse.resize(poolSize, false);
-        activeZombies.reserve(poolSize);
-        
-        size_t successCount = 0;
-        // Create all zombies
-        for (size_t i = 0; i < poolSize; ++i) {
-            try {
-                Zombie* zombie = new Zombie(renderer, 0.0f, 0.0f);
-                if (!zombie) {
-                    throw std::runtime_error("Failed to allocate zombie");
-                }
-                pool[i] = zombie;
-                successCount++;
-                
-                if ((i + 1) % 10 == 0 || i == poolSize - 1) {
-                    std::cout << "ZombiePool: Progress - " << (i + 1) << "/" << poolSize 
-                              << " zombies created (" 
-                              << static_cast<int>((i + 1) * 100.0f / poolSize) 
-                              << "%)" << std::endl;
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "ZombiePool: Failed to create zombie " << i << ": " << e.what() << std::endl;
-                pool[i] = nullptr; // Mark this slot as permanently unavailable
-            }
-        }
-
-        if (successCount == 0) {
-            throw std::runtime_error("ZombiePool: Failed to create any zombies");
-        }
-
-        std::cout << "ZombiePool: Successfully created " << successCount << "/" << poolSize 
-                  << " zombies (" << static_cast<int>(successCount * 100.0f / poolSize) 
-                  << "%)" << std::endl;
-                  
-    } catch (const std::exception& e) {
-        // Clean up any zombies that were created before the error
-        for (Zombie* zombie : pool) {
-            delete zombie;
-        }
-        pool.clear();
-        isInUse.clear();
-        throw; // Re-throw the exception after cleanup
-    }
-
-    std::cout << "ZombiePool: Pre-warming pool..." << std::endl;
-    PrewarmPool();
+void ZombiePool::AddZombie() {
+    // Create zombie off-screen initially
+    Zombie* zombie = new Zombie(renderer, -1000.0f, -1000.0f);
+    pool.push_back(zombie);
+    isInUse.push_back(false);  // Mark as not in use initially
 }
 
 ZombiePool::~ZombiePool() {

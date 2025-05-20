@@ -19,7 +19,8 @@ Game::Game() :
     camera(nullptr),
     chunkManager(nullptr),
     zombiePool(nullptr),
-    waveManager(nullptr) {
+    waveManager(nullptr),
+    loadingScreen(nullptr) {
     std::srand(static_cast<unsigned>(std::time(nullptr)));
 }
 
@@ -62,44 +63,69 @@ bool Game::Initialize() {
         return false;
     }
 
-    // Create WaveManager first since Player needs it
-    waveManager = new WaveManager();
-    
-    // Create and initialize UI
-    ui = new UI(renderer);
-    if (!ui->Initialize()) {
-        std::cerr << "UI initialization failed" << std::endl;
-        return false;
-    }
-    
-     // Create player instance with WaveManager and UI
-    player = new Player(renderer, waveManager, ui);
-
-    // Create camera instance BEFORE ChunkManager if ChunkManager needs player/camera info indirectly
-    // For now, player is enough for camera initial position.
-    camera = new Camera(player->GetX() - Constants::WINDOW_WIDTH / 2.0f + player->GetDestRect().w / 2.0f, 
-                        player->GetY() - Constants::WINDOW_HEIGHT / 2.0f + player->GetDestRect().h / 2.0f, 
-                        Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
-
-    // Create ChunkManager instance
-    // Ensure player is initialized before passing to ChunkManager
-    chunkManager = new ChunkManager(renderer, player, "assets/maps/grasstiles.csv", "assets/tilesets/Grass 13  .png");
-
-    // Initialize the zombie pool
-    try {
-        std::cout << "Game: Creating zombie pool..." << std::endl;
-        zombiePool = new ZombiePool(renderer, ZOMBIE_POOL_SIZE);
-    } catch (const std::exception& e) {
-        std::cerr << "Failed to create zombie pool: " << e.what() << std::endl;
-        return false;
-    }
-
-    // Start first wave
-    waveManager->StartNextWave();
+    InitializeGameState();
 
     isRunning = true;
     previousTime = SDL_GetTicks();
     return true;
+}
+
+void Game::InitializeGameState() {
+    try {
+        // Create loading screen
+        loadingScreen = std::make_unique<LoadingScreen>(renderer);
+        loadingScreen->Render(0.0f, "Initializing game components...");
+
+        // Initialize wave manager first since other components depend on it
+        waveManager = new WaveManager();
+        loadingScreen->Render(0.0f, "Initializing wave manager...");
+        
+        // Create and initialize UI
+        ui = new UI(renderer);
+        if (!ui->Initialize()) {
+            throw std::runtime_error("UI initialization failed");
+        }
+        loadingScreen->Render(0.0f, "Creating user interface...");
+        
+        // Create player instance
+        player = new Player(renderer, waveManager, ui);
+        loadingScreen->Render(0.0f, "Creating player...");
+
+        // Create camera instance
+        camera = new Camera(player->GetX() - SCREEN_WIDTH / 2.0f + player->GetDestRect().w / 2.0f, 
+                          player->GetY() - SCREEN_HEIGHT / 2.0f + player->GetDestRect().h / 2.0f, 
+                          SCREEN_WIDTH, SCREEN_HEIGHT);
+        
+        // Initialize chunk manager
+        chunkManager = new ChunkManager(renderer, player, "assets/maps/grasstiles.csv", "assets/tilesets/Grass 13  .png");
+        loadingScreen->Render(0.0f, "Loading map chunks...");        // Initialize zombie pool with loading updates
+        std::cout << "Game: Creating zombie pool..." << std::endl;
+        loadingScreen->Render(0.0f, "Creating zombie pool...");
+
+        // Create zombies gradually to show progress
+        zombiePool = new ZombiePool(renderer, ZOMBIE_POOL_SIZE);
+        for(size_t i = 0; i < ZOMBIE_POOL_SIZE; i++) {
+            zombiePool->AddZombie(); // Add zombies one by one
+            if(i % 10 == 0 || i == ZOMBIE_POOL_SIZE - 1) { // Update progress every 10 zombies and at the end
+                float progress = static_cast<float>(i + 1) / ZOMBIE_POOL_SIZE;
+                loadingScreen->Render(progress, "Creating zombie pool... " + 
+                    std::to_string(i + 1) + "/" + std::to_string(ZOMBIE_POOL_SIZE));
+            }
+        }
+        
+        loadingScreen->Render(1.0f, "Zombie pool creation complete!");
+        SDL_Delay(500); // Short delay to show completion
+
+        // Start first wave
+        waveManager->StartNextWave();
+
+        // Clear loading screen
+        loadingScreen.reset();
+    } 
+    catch (const std::exception& e) {
+        std::cerr << "Failed to initialize game state: " << e.what() << std::endl;
+        CleanupGameState();  // Clean up any partially initialized state
+    }
 }
 
 void Game::HandleEvents() {
@@ -367,4 +393,36 @@ void Game::Cleanup() {
 
     IMG_Quit();
     SDL_Quit();
+}
+
+void Game::CleanupGameState() {
+    if (waveManager) {
+        delete waveManager;
+        waveManager = nullptr;
+    }
+
+    if (player) {
+        delete player;
+        player = nullptr;
+    }
+
+    if (ui) {
+        delete ui;
+        ui = nullptr;
+    }
+
+    if (chunkManager) {
+        delete chunkManager;
+        chunkManager = nullptr;
+    }
+
+    if (camera) {
+        delete camera;
+        camera = nullptr;
+    }
+
+    if (zombiePool) {
+        delete zombiePool;
+        zombiePool = nullptr;
+    }
 }

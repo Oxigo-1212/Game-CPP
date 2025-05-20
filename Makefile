@@ -1,9 +1,9 @@
 all: game
 
-game: main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o
-	g++ -Isrc/include -o game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o -Lsrc/lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf
+game: main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o loadingscreen.o
+	g++ -Isrc/include -o game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o loadingscreen.o -Lsrc/lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf
 
-game.o: src/game.cpp src/include/Game.h src/include/Player.h src/include/UI.h
+game.o: src/game.cpp src/include/Game.h src/include/Player.h src/include/UI.h src/include/LoadingScreen.h
 	g++ -Isrc/include -c src/game.cpp -o game.o
 
 player.o: src/player.cpp src/include/Player.h
@@ -30,14 +30,14 @@ zombie.o: src/zombie.cpp src/include/Zombie.h src/include/Player.h src/include/B
 zombiepool.o: src/zombiepool.cpp src/include/ZombiePool.h src/include/Zombie.h
 	g++ -Isrc/include -c src/zombiepool.cpp -o zombiepool.o
 
-wavemanager.o: src/wavemanager.cpp src/include/WaveManager.h src/include/WaveConfig.h
+wavemanager.o: src/wavemanager.cpp src/include/WaveManager.h
 	g++ -Isrc/include -c src/wavemanager.cpp -o wavemanager.o
 
-main.o: src/main.cpp src/include/Game.h
-	g++ -Isrc/include -c src/main.cpp -o main.o
+loadingscreen.o: src/loadingscreen.cpp src/include/LoadingScreen.h
+	g++ -Isrc/include -c src/loadingscreen.cpp -o loadingscreen.o
 
 clean:
-	-del /F /Q game.exe main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o 2>nul || rm -f game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o
+	-del /F /Q game.exe main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o loadingscreen.o 2>nul || rm -f game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o loadingscreen.o
 
 run:
 	./game
