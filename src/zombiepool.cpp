@@ -2,6 +2,7 @@
 #include <iostream>
 #include <algorithm>
 #include <stdexcept>
+#include <cmath>
 
 ZombiePool::ZombiePool(SDL_Renderer* renderer, size_t poolSize) : renderer(renderer) {
     if (!renderer) {
@@ -60,6 +61,9 @@ ZombiePool::ZombiePool(SDL_Renderer* renderer, size_t poolSize) : renderer(rende
         isInUse.clear();
         throw; // Re-throw the exception after cleanup
     }
+
+    std::cout << "ZombiePool: Pre-warming pool..." << std::endl;
+    PrewarmPool();
 }
 
 ZombiePool::~ZombiePool() {
@@ -76,6 +80,15 @@ ZombiePool::~ZombiePool() {
 }
 
 Zombie* ZombiePool::GetZombie() {
+    // First check recycled zombies
+    if (!recycledZombies.empty()) {
+        Zombie* zombie = recycledZombies.front();
+        recycledZombies.pop();
+        activeZombies.push_back(zombie);
+        return zombie;
+    }
+
+    // If no recycled zombies, get one from the pool
     try {
         for (size_t i = 0; i < pool.size(); ++i) {
             if (!isInUse[i] && pool[i] != nullptr) {
@@ -84,9 +97,11 @@ Zombie* ZombiePool::GetZombie() {
                 
                 // Log pool usage stats
                 size_t activeCount = std::count(isInUse.begin(), isInUse.end(), true);
-                if (activeCount > pool.size() * 0.8f) { // Warning at 80% capacity
+                if (activeCount > pool.size() * 0.8f) {
                     std::cout << "ZombiePool: High usage warning - " << activeCount << "/" 
                               << pool.size() << " zombies active" << std::endl;
+                    // Trigger aggressive recycling when pool is nearly full
+                    return pool[i];
                 }
                 
                 return pool[i];
@@ -140,18 +155,29 @@ void ZombiePool::Update(float deltaTime, Player* player) {
     }
 
     try {
-        // Copy the active zombies vector to prevent modification during iteration
+        // Update zombie distances and recycle if needed
+        UpdateZombieDistances(player);
+        
+        // Copy to prevent modification during iteration
         std::vector<Zombie*> currentActive = activeZombies;
         
         for (Zombie* zombie : currentActive) {
             if (zombie && !zombie->IsDead()) {
                 zombie->Update(deltaTime, player, currentActive);
                 
-                // If zombie died during update, return it to the pool
-                if (zombie->IsDead()) {
+                // If zombie died or is too far, recycle it
+                if (zombie->IsDead() || IsZombieTooFar(zombie, player, RECYCLE_DISTANCE)) {
                     ReturnZombie(zombie);
                 }
             }
+        }
+
+        // Optimize zombie distribution periodically
+        static float optimizeTimer = 0.0f;
+        optimizeTimer += deltaTime;
+        if (optimizeTimer >= 1.0f) {  // Optimize every second
+            OptimizeZombieDistribution(player);
+            optimizeTimer = 0.0f;
         }
     } catch (const std::exception& e) {
         std::cerr << "ZombiePool: Error in Update: " << e.what() << std::endl;
@@ -172,5 +198,81 @@ void ZombiePool::Render(SDL_Renderer* renderer, Camera* camera) {
         }
     } catch (const std::exception& e) {
         std::cerr << "ZombiePool: Error in Render: " << e.what() << std::endl;
+    }
+}
+
+void ZombiePool::RecycleDistantZombies(Player* player, float maxDistance) {
+    std::vector<Zombie*> zombiesToRecycle;
+    
+    for (Zombie* zombie : activeZombies) {
+        if (IsZombieTooFar(zombie, player, maxDistance)) {
+            zombiesToRecycle.push_back(zombie);
+        }
+    }
+    
+    for (Zombie* zombie : zombiesToRecycle) {
+        ReturnZombie(zombie);
+        recycledZombies.push(zombie);
+    }
+}
+
+void ZombiePool::OptimizeZombieDistribution(Player* player) {
+    size_t activeCount = activeZombies.size();
+    
+    // If we're using too many zombies, recycle distant ones
+    if (activeCount > pool.size() * 0.8f) {
+        RecycleDistantZombies(player, MIN_RECYCLE_DISTANCE);
+    }
+    
+    // Ensure zombies are well-distributed around the player
+    std::vector<Zombie*> poorlyPlaced;
+    for (Zombie* zombie : activeZombies) {
+        if (IsZombieTooFar(zombie, player, OPTIMAL_DISTANCE)) {
+            poorlyPlaced.push_back(zombie);
+        }
+    }
+    
+    // Reposition poorly placed zombies
+    for (Zombie* zombie : poorlyPlaced) {
+        SDL_Point newPos = GetOptimalSpawnPosition(player);
+        zombie->Reset(static_cast<float>(newPos.x), static_cast<float>(newPos.y));
+    }
+}
+
+bool ZombiePool::IsZombieTooFar(const Zombie* zombie, const Player* player, float maxDistance) const {
+    if (!zombie || !player) return true;
+    
+    float dx = zombie->GetX() - player->GetX();
+    float dy = zombie->GetY() - player->GetY();
+    float distSquared = dx * dx + dy * dy;
+    
+    return distSquared > maxDistance * maxDistance;
+}
+
+void ZombiePool::UpdateZombieDistances(Player* player) {
+    // Recycle zombies that are too far from the player
+    RecycleDistantZombies(player, RECYCLE_DISTANCE);
+}
+
+SDL_Point ZombiePool::GetOptimalSpawnPosition(Player* player) const {
+    // Generate a position at optimal distance from player
+    float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * M_PI;
+    float distance = OPTIMAL_DISTANCE * (0.8f + 0.4f * static_cast<float>(rand()) / RAND_MAX);
+    
+    SDL_Point pos;
+    pos.x = static_cast<int>(player->GetX() + cos(angle) * distance);
+    pos.y = static_cast<int>(player->GetY() + sin(angle) * distance);
+    
+    return pos;
+}
+
+void ZombiePool::PrewarmPool() {
+    // Create some initial zombies to prevent stutter when first spawning
+    for (size_t i = 0; i < pool.size() / 4; ++i) {
+        Zombie* zombie = GetZombie();
+        if (zombie) {
+            ReturnZombie(zombie);
+            recycledZombies.push(zombie);
+        }
     }
 }
