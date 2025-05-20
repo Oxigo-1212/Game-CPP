@@ -1,12 +1,13 @@
 #include "include/UI.h"
 #include <sstream>
+#include <iomanip>
 
 UI::UI(SDL_Renderer* renderer) : renderer(renderer), font(nullptr),
     textColor({255, 255, 255, 255}),         // White
     barFillColor({0, 255, 0, 255}),          // Green
     barBackgroundColor({255, 0, 0, 255}),    // Red
-    ammoTexture(nullptr), healthTexture(nullptr), notificationTexture(nullptr),
-    notificationTimer(0.0f)
+    ammoTexture(nullptr), healthTexture(nullptr), waveInfoTexture(nullptr),
+    notificationTexture(nullptr), notificationTimer(0.0f)
 {
 }
 
@@ -39,6 +40,10 @@ void UI::Cleanup() {
     if (healthTexture) {
         SDL_DestroyTexture(healthTexture);
         healthTexture = nullptr;
+    }
+    if (waveInfoTexture) {
+        SDL_DestroyTexture(waveInfoTexture);
+        waveInfoTexture = nullptr;
     }
     if (notificationTexture) {
         SDL_DestroyTexture(notificationTexture);
@@ -169,9 +174,50 @@ void UI::RenderNotification() {
     }
 }
 
+void UI::UpdateWaveInfo(int currentWave, int zombiesRemaining, float spawnTimer) {
+    // Clean up old texture
+    if (waveInfoTexture) {
+        SDL_DestroyTexture(waveInfoTexture);
+        waveInfoTexture = nullptr;
+    }
+
+    // Format wave info text
+    std::stringstream ss;
+    if (zombiesRemaining <= 0) {
+        // Between waves, show countdown
+        ss << "Wave " << currentWave << " | Next Wave in " << std::fixed << std::setprecision(1) << spawnTimer << "s";
+    } else {
+        // During wave, just show wave number
+        ss << "Wave " << currentWave;
+    }
+
+    // Create new texture
+    waveInfoTexture = CreateTextTexture(ss.str());
+    if (waveInfoTexture) {
+        int w, h;
+        SDL_QueryTexture(waveInfoTexture, nullptr, nullptr, &w, &h);
+        // Center horizontally at top of screen
+        waveInfoRect = {
+            (WINDOW_WIDTH - w) / 2,  // Center horizontally
+            WAVE_INFO_Y,             // Fixed distance from top
+            w,
+            h
+        };
+    }
+}
+
+void UI::RenderWaveInfo() {
+    if (waveInfoTexture) {
+        SDL_RenderCopy(renderer, waveInfoTexture, nullptr, &waveInfoRect);
+    }
+}
+
 void UI::Render(int currentHealth, int maxHealth, int currentAmmo, int maxAmmo) {
     UpdateTextTextures(currentHealth, maxHealth, currentAmmo, maxAmmo);
     
+    // Render wave info at top center
+    RenderWaveInfo();
+
     // Render health bar and text
     if (healthTexture) {
         SDL_RenderCopy(renderer, healthTexture, nullptr, &healthRect);

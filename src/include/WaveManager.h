@@ -15,7 +15,8 @@ public:
     // Wave state getters
     int GetCurrentWave() const { return currentWave; }
     int GetZombiesRemaining() const { return zombiesRemaining; }
-    float GetSpawnDelay() const { return spawnDelay; }
+    float GetSpawnDelay() const { return spawnTimer > 0 ? spawnTimer : 0.0f; }
+    float GetWaveDelay() const { return waitingForNextWave ? waveDelayTimer : 0.0f; }
     int GetCurrentGroupSize() const { return currentGroupSize; }
     bool IsBossWave() const { return currentWave % WaveConfig::BOSS_WAVE_INTERVAL == 0; }
     

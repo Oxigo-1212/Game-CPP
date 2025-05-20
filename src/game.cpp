@@ -130,23 +130,22 @@ void Game::Update(float deltaTime) {
         }
     }
 
-    // Update wave manager
+    // Update wave manager and UI
     if (waveManager) {
         waveManager->Update(deltaTime);
         
-        // Check for weapon unlocks
-        if (waveManager->HasNewWeaponUnlock()) {
-            if (waveManager->GetCurrentWave() == WaveConfig::RIFLE_UNLOCK_WAVE) {
-                ui->ShowNotification("Rifle Unlocked! Press 2 to equip");
-            } else if (waveManager->GetCurrentWave() == WaveConfig::SHOTGUN_UNLOCK_WAVE) {
-                ui->ShowNotification("Shotgun Unlocked! Press 3 to equip");
-            }
-            waveManager->AcknowledgeWeaponUnlock();
+        // Update UI with wave info
+        if (ui) {
+            ui->UpdateWaveInfo(
+                waveManager->GetCurrentWave(),
+                waveManager->GetZombiesRemaining(),
+                waveManager->GetWaveDelay()  // This will get either the wave delay timer or 0
+            );
         }
         
-        // Spawn entire group at once
+        // Spawn zombies if needed
         if (waveManager->ShouldSpawnZombie()) {
-            // Spawn as many zombies as the current group size indicates
+            // Spawn entire group at once
             int groupSize = waveManager->GetCurrentGroupSize();
             for (int i = 0; i < groupSize; i++) {
                 SpawnZombie();
@@ -264,8 +263,6 @@ void Game::SpawnZombie() {
             (static_cast<float>(rand()) / RAND_MAX * (WaveConfig::SPEED_VARIATION * 2));
             
         zombie->Reset(static_cast<float>(spawnPos.x), static_cast<float>(spawnPos.y), speedMultiplier);
-        std::cout << "Spawned zombie at (" << spawnPos.x << ", " << spawnPos.y 
-                  << ") with speed multiplier " << speedMultiplier << std::endl;
         waveManager->OnZombieSpawned();
     } else {
         std::cerr << "Failed to get zombie from pool" << std::endl;

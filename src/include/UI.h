@@ -12,6 +12,8 @@ private:    // Constants
     static constexpr int BAR_HEIGHT = 20;
     static constexpr int TEXT_SPACING = 5;
     static constexpr float NOTIFICATION_DURATION = 3.0f;  // How long notifications stay on screen
+    static constexpr int WAVE_INFO_Y = 20;  // Wave info appears at top of screen
+    static constexpr int WINDOW_WIDTH = 1280;  // Match your game window width
 
     SDL_Renderer* renderer;
     TTF_Font* font;
@@ -24,6 +26,8 @@ private:    // Constants
     SDL_Rect ammoRect;
     SDL_Texture* healthTexture;
     SDL_Rect healthRect;
+    SDL_Texture* waveInfoTexture;
+    SDL_Rect waveInfoRect;
 
     // Notification system
     std::string notificationText;
@@ -40,6 +44,7 @@ public:
     void Render(int currentHealth, int maxHealth, int currentAmmo, int maxAmmo);
     void ShowNotification(const std::string& text);
     void UpdateNotification(float deltaTime);
+    void UpdateWaveInfo(int currentWave, int zombiesRemaining, float spawnTimer);
 
 private:
     void RenderHealthBar(int currentHealth, int maxHealth);
@@ -47,4 +52,5 @@ private:
     SDL_Texture* CreateTextTexture(const std::string& text);
     void UpdateTextTextures(int currentHealth, int maxHealth, int currentAmmo, int maxAmmo);
     void RenderNotification();
+    void RenderWaveInfo();
 };

@@ -21,17 +21,6 @@ void WaveManager::StartNextWave() {
     zombiesInCurrentGroup = 0;
     currentGroupSize = GetRandomGroupSize();
     lastTimerUpdate = spawnTimer;
-
-    std::cout << "\n+================================+" << std::endl;
-    std::cout << "|          WAVE " << std::setw(2) << currentWave << " STARTING          |" << std::endl;
-    std::cout << "+================================+" << std::endl;
-    std::cout << "| Total Zombies: " << std::setw(3) << zombiesToSpawn << "               |" << std::endl;
-    std::cout << "| Group Size: " << std::setw(3) << currentGroupSize << "                 |" << std::endl;
-    std::cout << "| Spawn Delay: " << std::fixed << std::setprecision(1) << std::setw(4) << spawnDelay << "s              |" << std::endl;
-    if (IsBossWave()) {
-        std::cout << "| !!! BOSS WAVE !!!                 |" << std::endl;
-    }
-    std::cout << "+================================+" << std::endl;
 }
 
 void WaveManager::Update(float deltaTime) {
@@ -50,23 +39,10 @@ void WaveManager::Update(float deltaTime) {
             currentGroupSize = GetRandomGroupSize();
             spawnTimer = spawnDelay;
             lastTimerUpdate = spawnTimer;
-            std::cout << "\n+------------ Next Group ------------+" << std::endl;
-            std::cout << "| Size: " << std::setw(2) << currentGroupSize 
-                     << " zombies  |  Remaining: " << std::setw(3) << zombiesRemaining << "  |" << std::endl;
-            std::cout << "+--------------------------------+" << std::endl;
         }
 
         // Update spawn timer
         spawnTimer -= deltaTime;
-        
-        // Only show timer update when it changes by at least 0.1 seconds
-        if (std::abs(spawnTimer - lastTimerUpdate) >= 0.1f) {
-            std::cout << "\rSpawning in: " << std::fixed << std::setprecision(1) 
-                     << std::setw(4) << std::max(0.0f, spawnTimer) << "s | "
-                     << "Wave " << currentWave << " | "
-                     << "Remaining: " << std::setw(3) << zombiesRemaining << " " << std::flush;
-            lastTimerUpdate = spawnTimer;
-        }
     }
 
     if (zombiesRemaining <= 0 && !waitingForNextWave) {
@@ -94,26 +70,6 @@ void WaveManager::OnZombieSpawned() {
     if (zombiesRemaining > 0) {
         zombiesRemaining--;
         zombiesInCurrentGroup++;
-        
-        // Print status when the entire group has spawned
-        if (zombiesInCurrentGroup >= currentGroupSize) {
-            float healthMult = GetHealthMultiplier();
-            float speedMult = GetSpeedMultiplier();
-            float damageMult = GetDamageMultiplier();
-            
-            std::cout << "\n+----------- Group Spawned -----------+" << std::endl;
-            std::cout << "| Spawned: " << std::setw(2) << currentGroupSize 
-                     << " zombies                  |" << std::endl;
-            std::cout << "| Health: x" << std::fixed << std::setprecision(1) << std::setw(3) << healthMult 
-                     << "  Speed: x" << std::setw(3) << speedMult 
-                     << "  Damage: x" << std::setw(3) << damageMult << " |" << std::endl;
-            std::cout << "+--------------------------------+" << std::endl;
-            
-            if (zombiesRemaining > 0) {
-                int nextGroupSize = std::min(WaveConfig::MAX_GROUP_SIZE, zombiesRemaining);
-                std::cout << "Next group will have " << nextGroupSize << " zombies" << std::endl;
-            }
-        }
     }
 }
 
