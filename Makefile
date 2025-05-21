@@ -15,11 +15,11 @@ bullet.o: src/bullet.cpp src/include/Bullet.h
 ui.o: src/UI.cpp src/include/UI.h
 	g++ -Isrc/include -c src/UI.cpp -o ui.o
 
-tilemap.o: src/TileMap.cpp src/include/TileMap.h
-	g++ -Isrc/include -c src/TileMap.cpp -o tilemap.o
+tilemap.o: src/tilemap.cpp src/include/TileMap.h
+	g++ -Isrc/include -c src/tilemap.cpp -o tilemap.o
 
-camera.o: src/Camera.cpp src/include/Camera.h
-	g++ -Isrc/include -c src/Camera.cpp -o camera.o
+camera.o: src/camera.cpp src/include/Camera.h
+	g++ -Isrc/include -c src/camera.cpp -o camera.o
 
 ChunkManager.o: src/ChunkManager.cpp src/include/ChunkManager.h src/include/TileMap.h src/include/Player.h src/include/Camera.h
 	g++ -Isrc/include -c src/ChunkManager.cpp -o ChunkManager.o

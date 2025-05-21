@@ -1,4 +1,5 @@
 #include "include/LoadingScreen.h"
+#include "include/Constants.h"
 #include <iostream>
 
 LoadingScreen::LoadingScreen(SDL_Renderer* renderer) : renderer(renderer), font(nullptr), currentMessage("Loading...") {
@@ -18,12 +19,10 @@ LoadingScreen::~LoadingScreen() {
 void LoadingScreen::Render(float progress, const std::string& message) {
     // Clear screen
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-
-    // Draw loading bar background
+    SDL_RenderClear(renderer);    // Draw loading bar background
     SDL_Rect barBg = {
-        (SCREEN_WIDTH - BAR_WIDTH) / 2,
-        (SCREEN_HEIGHT - BAR_HEIGHT) / 2,
+        (Constants::WINDOW_WIDTH - BAR_WIDTH) / 2,
+        (Constants::WINDOW_HEIGHT - BAR_HEIGHT) / 2,
         BAR_WIDTH,
         BAR_HEIGHT
     };
@@ -32,8 +31,8 @@ void LoadingScreen::Render(float progress, const std::string& message) {
 
     // Draw loading bar progress
     SDL_Rect barFg = {
-        (SCREEN_WIDTH - BAR_WIDTH) / 2,
-        (SCREEN_HEIGHT - BAR_HEIGHT) / 2,
+        (Constants::WINDOW_WIDTH - BAR_WIDTH) / 2,
+        (Constants::WINDOW_HEIGHT - BAR_HEIGHT) / 2,
         static_cast<int>(BAR_WIDTH * progress),
         BAR_HEIGHT
     };
@@ -44,12 +43,11 @@ void LoadingScreen::Render(float progress, const std::string& message) {
     if (font) {
         SDL_Color textColor = {255, 255, 255, 255};
         SDL_Surface* textSurface = TTF_RenderText_Blended(font, message.c_str(), textColor);
-        if (textSurface) {
-            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+        if (textSurface) {            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
             if (textTexture) {
                 SDL_Rect textRect = {
-                    (SCREEN_WIDTH - textSurface->w) / 2,
-                    (SCREEN_HEIGHT - BAR_HEIGHT) / 2 - 40,
+                    (Constants::WINDOW_WIDTH - textSurface->w) / 2,
+                    (Constants::WINDOW_HEIGHT - BAR_HEIGHT) / 2 - 40,
                     textSurface->w,
                     textSurface->h
                 };

@@ -14,6 +14,7 @@
 #include "LoadingScreen.h"
 #include "GameState.h"
 #include "MainMenu.h"
+#include "Constants.h"
 
 class Game {
 private:
@@ -44,16 +45,11 @@ private:
 
     // Game objects
     Player* player;
-    UI* ui;
-    Camera* camera; // Added camera member
+    UI* ui;    Camera* camera; // Added camera member
     ChunkManager* chunkManager; // Added ChunkManager member
     ZombiePool* zombiePool; // Added ZombiePool member
     std::vector<Zombie*> zombies; // Added zombies container
     std::unique_ptr<LoadingScreen> loadingScreen; // Added LoadingScreen member
-
-    // Screen dimensions - consider moving to a Constants.h or config file
-    static constexpr int SCREEN_WIDTH = 1280;
-    static constexpr int SCREEN_HEIGHT = 720;
 
     // Game constants
     static constexpr int ZOMBIE_POOL_SIZE = 250; // Size of zombie pool
@@ -84,4 +80,6 @@ private:
     SDL_Point GetRandomSpawnPosition() const;
     void InitializeGameState();  // Added declaration
     void CleanupGameState();     // Added declaration
+    void UpdateWindowSize(int width, int height); // Method to update window dimensions
+    void ToggleFullscreen(); // Method to toggle between fullscreen and windowed mode
 };

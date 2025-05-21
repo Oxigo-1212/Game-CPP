@@ -2,6 +2,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <vector>
+#include <string>
+#include <fstream>
+#include <algorithm>
 #include "Button.h"
 
 class MainMenu {
@@ -13,28 +16,41 @@ public:
     void HandleEvents(const SDL_Event& event);
     void Update(float deltaTime);
     void Render();
-      bool ShouldStartGame() const;
+    void RenderHighScores(); // New method to render high scores
+    bool ShouldStartGame() const;
     bool ShouldExitGame() const;
+    bool ShouldShowScores() const;
     void Reset(); // Reset menu state
+
+    // Set the scale factor for high scores display
+    void SetHighScoreScale(float scale);
     
 private:
+    struct ScoreEntry {
+        int wave;
+        std::string date;
+    };
+      void LoadHighScores();
+    // Helper method to get scaled position values
+    int Scale(int value) const;
+    
     SDL_Renderer* renderer;
     TTF_Font* titleFont;
     TTF_Font* buttonFont;
+    TTF_Font* scoreFont;  // Separate font for high scores
     
     SDL_Texture* titleTexture;
     SDL_Texture* backgroundTexture;
     
     Button* startButton;
-    Button* optionsButton;
+    Button* scoresButton; // Changed from optionsButton
     Button* exitButton;
     
     bool startGame;
     bool exitGame;
-    
-    // Screen dimensions for positioning
-    static constexpr int SCREEN_WIDTH = 1280;
-    static constexpr int SCREEN_HEIGHT = 720;
+    bool showScores; // Added to track scores button
+      std::vector<ScoreEntry> highScores;
+    float scoreScale;     // Scale factor for high score UI
     
     // Button dimensions
     static constexpr int BUTTON_WIDTH = 200;

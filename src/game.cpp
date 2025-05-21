@@ -1,6 +1,7 @@
 #include "include/Game.h"
 #include "include/ChunkManager.h" // Ensure ChunkManager is included
 #include "include/WaveConfig.h" // Include for weapon unlock wave constants
+#include "include/Constants.h" // Include for dynamic window dimensions
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
@@ -36,21 +37,31 @@ bool Game::Initialize() {
         std::cerr << "SDL initialization failed: " << SDL_GetError() << std::endl;
         return false;
     }
-
+    
+    // Create window in fullscreen desktop mode to fill the entire display
     window = SDL_CreateWindow(
         "Zombie Shooter",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
         1280, 720,
-        SDL_WINDOW_SHOWN
+        SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN_DESKTOP
     );
 
     if (!window) {
         std::cerr << "Window creation failed: " << SDL_GetError() << std::endl;
         return false;
     }
-
-    renderer = SDL_CreateRenderer(
+      // Get the actual display dimensions after creating the fullscreen window
+    int actualWidth, actualHeight;
+    SDL_GetWindowSize(window, &actualWidth, &actualHeight);
+    std::cout << "Display dimensions: " << actualWidth << "x" << actualHeight << std::endl;
+    
+    // Update the constants in the Constants namespace with the actual values
+    Constants::WINDOW_WIDTH = actualWidth;
+    Constants::WINDOW_HEIGHT = actualHeight;
+    
+    // Display message confirming fullscreen mode
+    std::cout << "Game running in fullscreen mode at " << Constants::WINDOW_WIDTH << "x" << Constants::WINDOW_HEIGHT << std::endl;    renderer = SDL_CreateRenderer(
         window,
         -1,
         SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
@@ -59,7 +70,12 @@ bool Game::Initialize() {
     if (!renderer) {
         std::cerr << "Renderer creation failed: " << SDL_GetError() << std::endl;
         return false;
-    }    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
+    }
+    
+    // Initialize the loading screen right after creating the renderer
+    loadingScreen = std::make_unique<LoadingScreen>(renderer);
+    
+    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
         std::cerr << "SDL_image initialization failed: " << IMG_GetError() << std::endl;
         return false;
     }
@@ -85,11 +101,62 @@ bool Game::Initialize() {
     return true;
 }
 
-void Game::InitializeGameState() {    try {
-        // Create loading screen
-        loadingScreen = std::make_unique<LoadingScreen>(renderer);
-        loadingScreen->Render(0.0f, "Initializing game components...");
+void Game::UpdateWindowSize(int width, int height) {
+    // Update the global constants
+    Constants::WINDOW_WIDTH = width;
+    Constants::WINDOW_HEIGHT = height;
+    
+    std::cout << "Window size updated to: " << width << "x" << height << std::endl;
+    
+    // Update camera dimensions if it exists
+    if (camera) {
+        camera->SetViewDimensions(width, height);
+    }
+    
+    // No need to update UI elements as they now use the dynamic Constants values
+}
+
+void Game::ToggleFullscreen() {
+    // Check current fullscreen state
+    Uint32 currentFlags = SDL_GetWindowFlags(window);
+    bool isCurrentlyFullscreen = (currentFlags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
+      if (isCurrentlyFullscreen) {
+        // Switch to windowed mode
+        std::cout << "Switching to windowed mode" << std::endl;
+        SDL_SetWindowFullscreen(window, 0);
+        // Set a standard windowed size
+        SDL_SetWindowSize(window, 1280, 720);
+        SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
         
+        // Show notification if UI exists
+        if (ui) {
+            ui->ShowNotification("Windowed Mode");
+        }
+    } else {
+        // Switch to fullscreen mode
+        std::cout << "Switching to fullscreen mode" << std::endl;
+        SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+        
+        // Show notification if UI exists
+        if (ui) {
+            ui->ShowNotification("Fullscreen Mode");
+        }
+    }
+    
+    // Update window size in our constants
+    int newWidth, newHeight;
+    SDL_GetWindowSize(window, &newWidth, &newHeight);
+    UpdateWindowSize(newWidth, newHeight);
+}
+
+void Game::InitializeGameState() {    
+    try {
+        // Use the existing loading screen (created in Initialize) 
+        // or create it if it doesn't exist for some reason
+        if (!loadingScreen) {
+            loadingScreen = std::make_unique<LoadingScreen>(renderer);
+        }
+        loadingScreen->Render(0.0f, "Initializing game components...");
         // Create and initialize UI first (doesn't depend on other components)
         ui = new UI(renderer);
         if (!ui->Initialize()) {
@@ -100,13 +167,12 @@ void Game::InitializeGameState() {    try {
         // Create temporary wave manager just for player initialization
         // Will be replaced with the real one later
         waveManager = new WaveManager();
-        
-        // Create player instance
+          // Create player instance
         player = new Player(renderer, waveManager, ui);
         loadingScreen->Render(0.2f, "Creating player...");// Create camera instance
-        camera = new Camera(player->GetX() - SCREEN_WIDTH / 2.0f + player->GetDestRect().w / 2.0f, 
-                          player->GetY() - SCREEN_HEIGHT / 2.0f + player->GetDestRect().h / 2.0f, 
-                          SCREEN_WIDTH, SCREEN_HEIGHT);
+        camera = new Camera(player->GetX() - Constants::WINDOW_WIDTH / 2.0f + player->GetDestRect().w / 2.0f, 
+                          player->GetY() - Constants::WINDOW_HEIGHT / 2.0f + player->GetDestRect().h / 2.0f, 
+                          Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
         loadingScreen->Render(0.4f, "Creating camera...");
         
         // Initialize chunk manager
@@ -158,9 +224,23 @@ void Game::InitializeGameState() {    try {
 
 void Game::HandleEvents() {
     SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_QUIT) {
+    while (SDL_PollEvent(&event)) {        if (event.type == SDL_QUIT) {
             isRunning = false;
+        }
+        
+        // Handle F11 key for toggling fullscreen mode in all game states
+        if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_F11) {
+            ToggleFullscreen();
+        }
+        
+        // Handle window resize events in all game states
+        if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+            int newWidth = event.window.data1;
+            int newHeight = event.window.data2;
+            std::cout << "Window resized to: " << newWidth << "x" << newHeight << std::endl;
+            
+            // Update the global constants
+            UpdateWindowSize(newWidth, newHeight);
         }
         
         switch (currentState) {
@@ -218,14 +298,28 @@ void Game::HandleEvents() {
             }
             break;
                 
+            case GameState::HIGH_SCORES:
+                // Handle high score screen events
+                if (event.type == SDL_KEYDOWN && 
+                    (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE || 
+                     event.key.keysym.scancode == SDL_SCANCODE_M)) {
+                    // Return to main menu
+                    currentState = GameState::MAIN_MENU;
+                    
+                    // Reset menu flags
+                    if (mainMenu) {
+                        mainMenu->Reset();
+                    }
+                }
+                break;
+                
             default:
                 break;
         }
     }
 }
 
-void Game::Update(float deltaTime) {
-    switch (currentState) {
+void Game::Update(float deltaTime) {    switch (currentState) {
         case GameState::MAIN_MENU:
             // Update main menu
             mainMenu->Update(deltaTime);
@@ -241,6 +335,13 @@ void Game::Update(float deltaTime) {
             
             if (mainMenu->ShouldExitGame()) {
                 isRunning = false;
+            }
+            
+            if (mainMenu->ShouldShowScores()) {
+                // Transition to high scores screen
+                currentState = GameState::HIGH_SCORES;
+                // Reset the flag to prevent repeated transitions
+                mainMenu->Reset();
             }
             break;
         case GameState::PLAYING:
@@ -476,19 +577,77 @@ void Game::Render() {
                 // Render pause screen overlay and text
                 ui->RenderPauseScreen();
             }
-            break;
-              case GameState::GAME_OVER:
+            break;        case GameState::GAME_OVER:
             // Render game over screen with stats
             if (ui && waveManager) {
                 // Get stats for the game over screen
                 int waveReached = waveManager->GetCurrentWave();
                 
+                // Save high score
+                ui->SaveHighScore(waveReached);
+                
                 // Use the updated method with only wave information
-                ui->RenderGameOverScreen(waveReached);
-            } else {
-                // Fallback if UI isn't initialized
+                ui->RenderGameOverScreen(waveReached);            } else {
+                // Fallback if UI isn't initialized - clear the screen with black
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
                 SDL_RenderClear(renderer);
+                
+                // Display a basic game over message without the UI
+                if (renderer && TTF_WasInit()) {
+                    TTF_Font* font = TTF_OpenFont("assets/fonts/Call of Ops Duty.otf", 48);
+                    if (font) {
+                        SDL_Color textColor = {255, 0, 0, 255}; // Red
+                        SDL_Surface* surface = TTF_RenderText_Blended(font, "GAME OVER", textColor);
+                        if (surface) {
+                            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+                            if (texture) {
+                                SDL_Rect textRect = {
+                                    (Constants::WINDOW_WIDTH - surface->w) / 2,
+                                    (Constants::WINDOW_HEIGHT - surface->h) / 2,
+                                    surface->w,
+                                    surface->h
+                                };
+                                SDL_RenderCopy(renderer, texture, nullptr, &textRect);
+                                SDL_DestroyTexture(texture);
+                            }
+                            SDL_FreeSurface(surface);
+                        }
+                        TTF_CloseFont(font);
+                    }
+                }
+            }
+            break;              case GameState::HIGH_SCORES:
+            // Render high scores screen using the main menu
+            if (mainMenu) {
+                mainMenu->RenderHighScores();
+            } else {
+                // Fallback if main menu isn't initialized - clear the screen with black
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                SDL_RenderClear(renderer);
+                
+                // Display a basic message
+                if (renderer && TTF_WasInit()) {
+                    TTF_Font* font = TTF_OpenFont("assets/fonts/Call of Ops Duty.otf", 48);
+                    if (font) {
+                        SDL_Color textColor = {255, 215, 0, 255}; // Gold
+                        SDL_Surface* surface = TTF_RenderText_Blended(font, "HIGH SCORES", textColor);
+                        if (surface) {
+                            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+                            if (texture) {
+                                SDL_Rect textRect = {
+                                    (Constants::WINDOW_WIDTH - surface->w) / 2,
+                                    Constants::WINDOW_HEIGHT / 3,
+                                    surface->w,
+                                    surface->h
+                                };
+                                SDL_RenderCopy(renderer, texture, nullptr, &textRect);
+                                SDL_DestroyTexture(texture);
+                            }
+                            SDL_FreeSurface(surface);
+                        }
+                        TTF_CloseFont(font);
+                    }
+                }
             }
             break;
             

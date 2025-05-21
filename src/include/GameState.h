@@ -5,5 +5,6 @@ enum class GameState {
     LOADING,
     PLAYING,
     PAUSED,
-    GAME_OVER
+    GAME_OVER,
+    HIGH_SCORES
 };

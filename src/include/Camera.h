@@ -26,6 +26,9 @@ public:
     int GetViewWidth() const { return viewWidth; }
     // Returns the camera's view height (screen height).
     int GetViewHeight() const { return viewHeight; }
+    
+    // Updates the camera's view dimensions (for window resize events)
+    void SetViewDimensions(int width, int height);
 
     // Converts world coordinates to screen coordinates.
     // Useful for rendering objects relative to the camera.

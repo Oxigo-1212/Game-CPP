@@ -3,6 +3,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <string>
+#include "Constants.h"
 
 class LoadingScreen {
 public:
@@ -16,10 +17,8 @@ private:
     SDL_Renderer* renderer;
     TTF_Font* font;
     std::string currentMessage;
-    
-    // Loading bar dimensions
+      // Loading bar dimensions
     static constexpr int BAR_WIDTH = 400;
     static constexpr int BAR_HEIGHT = 30;
-    static constexpr int SCREEN_WIDTH = 1280;
-    static constexpr int SCREEN_HEIGHT = 720;
+    // Use dynamic window dimensions from Constants namespace
 };
