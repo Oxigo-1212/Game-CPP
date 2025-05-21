@@ -22,7 +22,9 @@ bool UI::Initialize() {
             SDL_Log("SDL_ttf could not initialize! SDL_ttf Error: %s\n", TTF_GetError());
             return false;
         }
-    }    // Load font
+    }
+    
+    // Load font
     font = TTF_OpenFont("assets/fonts/Call of Ops Duty.otf", FONT_SIZE);
     if (font == nullptr) {
         SDL_Log("Failed to load font! SDL_ttf Error: %s\n", TTF_GetError());
@@ -56,14 +58,38 @@ void UI::Cleanup() {
 }
 
 SDL_Texture* UI::CreateTextTexture(const std::string& text) {
-    SDL_Surface* surface = TTF_RenderText_Blended(font, text.c_str(), textColor);
+    return CreateTextTexture(text, textColor, FONT_SIZE);
+}
+
+SDL_Texture* UI::CreateTextTexture(const std::string& text, SDL_Color color, int fontSize) {
+    // If we need a different font size, create a temporary font
+    TTF_Font* renderFont = font;
+    bool tempFont = false;
+    
+    if (fontSize != FONT_SIZE) {
+        renderFont = TTF_OpenFont("assets/fonts/Call of Ops Duty.otf", fontSize);
+        if (!renderFont) {
+            renderFont = font; // Fallback to default font if we can't load the requested size
+        } else {
+            tempFont = true;
+        }
+    }
+    
+    SDL_Surface* surface = TTF_RenderText_Blended(renderFont, text.c_str(), color);
     if (!surface) {
         SDL_Log("Failed to render text surface! SDL_ttf Error: %s\n", TTF_GetError());
+        if (tempFont) {
+            TTF_CloseFont(renderFont);
+        }
         return nullptr;
     }
 
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
+    
+    if (tempFont) {
+        TTF_CloseFont(renderFont);
+    }
 
     if (!texture) {
         SDL_Log("Failed to create texture from rendered text! SDL Error: %s\n", SDL_GetError());
@@ -229,4 +255,124 @@ void UI::Render(int currentHealth, int maxHealth, int currentAmmo, int maxAmmo) 
 
     // Render notification on top
     RenderNotification();
+}
+
+// New methods for game state screens
+
+void UI::RenderPauseScreen() {
+    // Semi-transparent black overlay
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 128);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_Rect fullScreen = {0, 0, WINDOW_WIDTH, WINDOW_HEIGHT};
+    SDL_RenderFillRect(renderer, &fullScreen);
+    
+    // Reset blend mode
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+    
+    // "PAUSED" title
+    SDL_Color pauseColor = {255, 255, 255, 255}; // White
+    SDL_Texture* pauseTexture = CreateTextTexture("PAUSED", pauseColor, 72);
+    if (pauseTexture) {
+        int textWidth, textHeight;
+        SDL_QueryTexture(pauseTexture, nullptr, nullptr, &textWidth, &textHeight);
+        
+        SDL_Rect textRect = {
+            (WINDOW_WIDTH - textWidth) / 2,
+            WINDOW_HEIGHT / 3 - textHeight / 2,
+            textWidth,
+            textHeight
+        };
+        
+        SDL_RenderCopy(renderer, pauseTexture, nullptr, &textRect);
+        SDL_DestroyTexture(pauseTexture);
+    }
+    
+    // Instructions
+    SDL_Texture* instructionTexture = CreateTextTexture(
+        "Press ESC to Resume - Press M for Main Menu", 
+        pauseColor,
+        28
+    );
+    
+    if (instructionTexture) {
+        int textWidth, textHeight;
+        SDL_QueryTexture(instructionTexture, nullptr, nullptr, &textWidth, &textHeight);
+        
+        SDL_Rect textRect = {
+            (WINDOW_WIDTH - textWidth) / 2,
+            WINDOW_HEIGHT / 2,
+            textWidth,
+            textHeight
+        };
+        
+        SDL_RenderCopy(renderer, instructionTexture, nullptr, &textRect);
+        SDL_DestroyTexture(instructionTexture);
+    }
+}
+
+void UI::RenderGameOverScreen(int waveReached) {
+    // Black background
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    
+    // "GAME OVER" title in red
+    SDL_Color gameOverColor = {255, 0, 0, 255}; // Red
+    SDL_Texture* gameOverTexture = CreateTextTexture("GAME OVER", gameOverColor, 72);
+    if (gameOverTexture) {
+        int textWidth, textHeight;
+        SDL_QueryTexture(gameOverTexture, nullptr, nullptr, &textWidth, &textHeight);
+        
+        SDL_Rect textRect = {
+            (WINDOW_WIDTH - textWidth) / 2,
+            WINDOW_HEIGHT / 4 - textHeight / 2,
+            textWidth,
+            textHeight
+        };
+        
+        SDL_RenderCopy(renderer, gameOverTexture, nullptr, &textRect);
+        SDL_DestroyTexture(gameOverTexture);
+    }    
+    // Stats in white
+    SDL_Color statsColor = {255, 255, 255, 255}; // White
+    
+    // Wave reached
+    std::stringstream waveText;
+    waveText << "Wave Reached: " << waveReached;
+    SDL_Texture* waveTexture = CreateTextTexture(waveText.str(), statsColor, 36);
+    
+    if (waveTexture) {
+        int textWidth, textHeight;
+        SDL_QueryTexture(waveTexture, nullptr, nullptr, &textWidth, &textHeight);
+        
+        SDL_Rect textRect = {
+            (WINDOW_WIDTH - textWidth) / 2,
+            WINDOW_HEIGHT / 2 - textHeight / 2, // Center vertically
+            textWidth,
+            textHeight
+        };
+        
+        SDL_RenderCopy(renderer, waveTexture, nullptr, &textRect);
+        SDL_DestroyTexture(waveTexture);
+    }
+      // Instructions - now with multiple options
+    SDL_Texture* instructionTexture = CreateTextTexture(
+        "Press R to Restart - Press M for Main Menu", 
+        statsColor,
+        28
+    );
+    
+    if (instructionTexture) {
+        int textWidth, textHeight;
+        SDL_QueryTexture(instructionTexture, nullptr, nullptr, &textWidth, &textHeight);
+        
+        SDL_Rect textRect = {
+            (WINDOW_WIDTH - textWidth) / 2,
+            WINDOW_HEIGHT * 3/4,
+            textWidth,
+            textHeight
+        };
+        
+        SDL_RenderCopy(renderer, instructionTexture, nullptr, &textRect);
+        SDL_DestroyTexture(instructionTexture);
+    }
 }

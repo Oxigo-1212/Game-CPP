@@ -6,18 +6,24 @@
 #include "Player.h"
 #include "UI.h"
 #include "TileMap.h"
-#include "Camera.h" // Added Camera include
-#include "ChunkManager.h" // Added ChunkManager include
-#include "Zombie.h" // Added Zombie include
-#include "ZombiePool.h" // Added ZombiePool include
-#include "WaveManager.h" // Added WaveManager include
-#include "LoadingScreen.h" // Added LoadingScreen include
+#include "Camera.h"
+#include "ChunkManager.h"
+#include "Zombie.h"
+#include "ZombiePool.h"
+#include "WaveManager.h"
+#include "LoadingScreen.h"
+#include "GameState.h"
+#include "MainMenu.h"
 
 class Game {
 private:
     bool isRunning;
     SDL_Window* window;
     SDL_Renderer* renderer;
+    
+    // Game state
+    GameState currentState;
+    MainMenu* mainMenu;
     
     // Timing variables
     const int FPS;

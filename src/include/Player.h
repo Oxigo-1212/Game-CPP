@@ -107,14 +107,15 @@ public:
     int GetHealth() const { return currentHealth; }
     int GetMaxHealth() const { return MAX_HEALTH; }
     void TakeDamage(int amount);
-    void Heal(int amount);
-
-    // Weapon methods
+    void Heal(int amount);    // Weapon methods
     void SwitchWeapon(WeaponType weapon);
     int GetCurrentAmmo() const;
     int GetMaxAmmo() const;
     float GetCurrentFireRate() const;
     float GetCurrentReloadTime() const;
+    
+    // Wave manager methods
+    void SetWaveManager(WaveManager* newWaveManager) { waveManager = newWaveManager; }
     
     // Position methods
     float GetX() const { return x; }

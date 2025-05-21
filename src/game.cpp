@@ -1,5 +1,6 @@
 #include "include/Game.h"
 #include "include/ChunkManager.h" // Ensure ChunkManager is included
+#include "include/WaveConfig.h" // Include for weapon unlock wave constants
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
@@ -9,6 +10,8 @@ Game::Game() :
     isRunning(false), 
     window(nullptr), 
     renderer(nullptr),
+    currentState(GameState::MAIN_MENU),
+    mainMenu(nullptr),
     previousTime(0),
     accumulator(0.0f),
     FPS(60),
@@ -35,7 +38,7 @@ bool Game::Initialize() {
     }
 
     window = SDL_CreateWindow(
-        "Game",
+        "Zombie Shooter",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
         1280, 720,
@@ -56,68 +59,93 @@ bool Game::Initialize() {
     if (!renderer) {
         std::cerr << "Renderer creation failed: " << SDL_GetError() << std::endl;
         return false;
-    }
-
-    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
+    }    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
         std::cerr << "SDL_image initialization failed: " << IMG_GetError() << std::endl;
         return false;
     }
+    
+    // Initialize SDL_ttf
+    if (TTF_Init() != 0) {
+        std::cerr << "SDL_ttf initialization failed: " << TTF_GetError() << std::endl;
+        return false;
+    }
+    
+    // Initialize main menu
+    mainMenu = new MainMenu(renderer);
+    if (!mainMenu->Initialize()) {
+        std::cerr << "Main menu initialization failed" << std::endl;
+        return false;
+    }
 
-    InitializeGameState();
+    // Initialize game state - only needed when switching to PLAYING state
+    // InitializeGameState();
 
     isRunning = true;
     previousTime = SDL_GetTicks();
     return true;
 }
 
-void Game::InitializeGameState() {
-    try {
+void Game::InitializeGameState() {    try {
         // Create loading screen
         loadingScreen = std::make_unique<LoadingScreen>(renderer);
         loadingScreen->Render(0.0f, "Initializing game components...");
-
-        // Initialize wave manager first since other components depend on it
-        waveManager = new WaveManager();
-        loadingScreen->Render(0.0f, "Initializing wave manager...");
         
-        // Create and initialize UI
+        // Create and initialize UI first (doesn't depend on other components)
         ui = new UI(renderer);
         if (!ui->Initialize()) {
             throw std::runtime_error("UI initialization failed");
         }
-        loadingScreen->Render(0.0f, "Creating user interface...");
+        loadingScreen->Render(0.1f, "Creating user interface...");
+        
+        // Create temporary wave manager just for player initialization
+        // Will be replaced with the real one later
+        waveManager = new WaveManager();
         
         // Create player instance
         player = new Player(renderer, waveManager, ui);
-        loadingScreen->Render(0.0f, "Creating player...");
-
-        // Create camera instance
+        loadingScreen->Render(0.2f, "Creating player...");// Create camera instance
         camera = new Camera(player->GetX() - SCREEN_WIDTH / 2.0f + player->GetDestRect().w / 2.0f, 
                           player->GetY() - SCREEN_HEIGHT / 2.0f + player->GetDestRect().h / 2.0f, 
                           SCREEN_WIDTH, SCREEN_HEIGHT);
+        loadingScreen->Render(0.4f, "Creating camera...");
         
         // Initialize chunk manager
         chunkManager = new ChunkManager(renderer, player, "assets/maps/grasstiles.csv", "assets/tilesets/Grass 13  .png");
-        loadingScreen->Render(0.0f, "Loading map chunks...");        // Initialize zombie pool with loading updates
+        loadingScreen->Render(0.5f, "Loading map chunks...");
+        
+        // Initialize zombie pool with loading updates
         std::cout << "Game: Creating zombie pool..." << std::endl;
-        loadingScreen->Render(0.0f, "Creating zombie pool...");
-
-        // Create zombies gradually to show progress
+        loadingScreen->Render(0.6f, "Creating zombie pool...");        // Create zombies gradually to show progress
         zombiePool = new ZombiePool(renderer, ZOMBIE_POOL_SIZE);
-        for(size_t i = 0; i < ZOMBIE_POOL_SIZE; i++) {
-            zombiePool->AddZombie(); // Add zombies one by one
+        for(size_t i = 0; i < ZOMBIE_POOL_SIZE; i++) {        zombiePool->AddZombie(); // Add zombies one by one
             if(i % 10 == 0 || i == ZOMBIE_POOL_SIZE - 1) { // Update progress every 10 zombies and at the end
-                float progress = static_cast<float>(i + 1) / ZOMBIE_POOL_SIZE;
+                float progress = 0.6f + (0.3f * static_cast<float>(i + 1) / ZOMBIE_POOL_SIZE);
                 loadingScreen->Render(progress, "Creating zombie pool... " + 
                     std::to_string(i + 1) + "/" + std::to_string(ZOMBIE_POOL_SIZE));
             }
         }
         
-        loadingScreen->Render(1.0f, "Zombie pool creation complete!");
-        SDL_Delay(500); // Short delay to show completion
-
+        loadingScreen->Render(0.9f, "Initializing wave manager...");
+        
+        // Replace temporary wave manager with final one now that all systems are ready
+        WaveManager* finalWaveManager = new WaveManager();
+        
+        // Update player with the final wave manager
+        if (player) {
+            player->SetWaveManager(finalWaveManager);
+        }
+        
+        // Delete temporary wave manager and replace with final one
+        delete waveManager;
+        waveManager = finalWaveManager;
+        
         // Start first wave
         waveManager->StartNextWave();
+        
+        loadingScreen->Render(1.0f, "Game initialization complete!");
+        
+        // Short delay to show completion
+        SDL_Delay(500);
 
         // Clear loading screen
         loadingScreen.reset();
@@ -133,100 +161,195 @@ void Game::HandleEvents() {
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) {
             isRunning = false;
-        } else if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE && event.type == SDL_KEYDOWN) {
-            isRunning = false;
-        } else if (event.type == SDL_MOUSEMOTION) {
-            // Convert screen mouse coordinates to world coordinates for the player
-            SDL_FPoint worldMousePos = camera->ScreenToWorld(static_cast<float>(event.motion.x), static_cast<float>(event.motion.y));
-            player->UpdateMousePosition(static_cast<int>(worldMousePos.x), static_cast<int>(worldMousePos.y));
-        } else {
-            player->HandleInput(event);
+        }
+        
+        switch (currentState) {
+            case GameState::MAIN_MENU:
+                // Handle main menu events
+                mainMenu->HandleEvents(event);
+                break;
+                
+            case GameState::PLAYING:
+                // Handle gameplay events
+                if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE && event.type == SDL_KEYDOWN) {
+                    currentState = GameState::PAUSED;
+                } else if (event.type == SDL_MOUSEMOTION && camera && player) {
+                    // Convert screen mouse coordinates to world coordinates for the player
+                    SDL_FPoint worldMousePos = camera->ScreenToWorld(static_cast<float>(event.motion.x), static_cast<float>(event.motion.y));
+                    player->UpdateMousePosition(static_cast<int>(worldMousePos.x), static_cast<int>(worldMousePos.y));
+                } else if (player) {
+                    player->HandleInput(event);
+                }
+                break;                case GameState::PAUSED:
+                // Handle pause menu events
+                if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE && event.type == SDL_KEYDOWN) {
+                    currentState = GameState::PLAYING;
+                } else if (event.key.keysym.scancode == SDL_SCANCODE_M && event.type == SDL_KEYDOWN) {
+                    // Return to main menu when M is pressed
+                    CleanupGameState();
+                    currentState = GameState::MAIN_MENU;
+                    
+                    // Reset the main menu flags
+                    if (mainMenu) {
+                        mainMenu->Reset();
+                    }
+                }
+                break;
+                
+                case GameState::GAME_OVER:            // Handle game over events
+            if (event.type == SDL_KEYDOWN) {
+                if (event.key.keysym.scancode == SDL_SCANCODE_R) {
+                    // Restart the game directly
+                    CleanupGameState();
+                    currentState = GameState::LOADING;
+                    InitializeGameState();
+                    currentState = GameState::PLAYING;
+                } 
+                else if (event.key.keysym.scancode == SDL_SCANCODE_M || event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                    // Return to main menu
+                    CleanupGameState();
+                    currentState = GameState::MAIN_MENU;
+                    
+                    // Reset the main menu flags
+                    if (mainMenu) {
+                        mainMenu->Reset();
+                    }
+                }
+            }
+            break;
+                
+            default:
+                break;
         }
     }
 }
 
 void Game::Update(float deltaTime) {
-    if (player) {
-        player->Update(deltaTime);
-        // Check if player died
-        if (player->IsDead()) {
-            std::cout << "Game Over!" << std::endl;
-            isRunning = false;
-            return;
-        }
-    }
-
-    // Update wave manager and UI
-    if (waveManager) {
-        waveManager->Update(deltaTime);
-        
-        // Update UI with wave info
-        if (ui) {
-            ui->UpdateWaveInfo(
-                waveManager->GetCurrentWave(),
-                waveManager->GetZombiesRemaining(),
-                waveManager->GetWaveDelay()  // This will get either the wave delay timer or 0
-            );
-        }
-        
-        // Spawn zombies if needed
-        if (waveManager->ShouldSpawnZombie()) {
-            // Spawn entire group at once
-            int groupSize = waveManager->GetCurrentGroupSize();
-            for (int i = 0; i < groupSize; i++) {
-                SpawnZombie();
-            }
-        }
-    }
-
-    // Update UI notifications
-    if (ui) {
-        ui->UpdateNotification(deltaTime);
-    }
-
-    // Update zombies through the pool
-    if (zombiePool) {
-        zombiePool->Update(deltaTime, player);
-
-        // Check collision with player's bullets
-        auto& bullets = player->GetBullets();
-        for (auto bulletIt = bullets.begin(); bulletIt != bullets.end();) {
-            Bullet* bullet = *bulletIt;
-            if (!bullet->IsActive()) {
-                ++bulletIt;
-                continue;
-            }
-
-            // Let the zombie pool handle bullet collisions and death
-            bool hitZombie = false;
-            SDL_Rect bulletRect = bullet->GetHitbox();
-            SDL_Point bulletPos = { static_cast<int>(bullet->GetX()), static_cast<int>(bullet->GetY()) };
+    switch (currentState) {
+        case GameState::MAIN_MENU:
+            // Update main menu
+            mainMenu->Update(deltaTime);
             
-            for (Zombie* zombie : zombiePool->GetActiveZombies()) {                if (!zombie->IsDead() && zombie->CheckCollisionWithBullet(bullet)) {
-                    // Note: TakeDamage is now handled inside CheckCollisionWithBullet
-                    bullet->Deactivate();
-                    hitZombie = true;
-                    break;
+            // Check if we should start the game or exit
+            if (mainMenu->ShouldStartGame()) {
+                // Initialize game state when transitioning from menu to game
+                currentState = GameState::LOADING;
+                // Start loading the game in the next frame
+                InitializeGameState();
+                currentState = GameState::PLAYING;
+            }
+            
+            if (mainMenu->ShouldExitGame()) {
+                isRunning = false;
+            }
+            break;
+        case GameState::PLAYING:
+            // Regular game update logic
+            if (player) {
+                player->Update(deltaTime);
+                // Check if player died
+                if (player->IsDead()) {
+                    std::cout << "Game Over!" << std::endl;
+                    currentState = GameState::GAME_OVER;
+                    return; // Exit the function since we're changing states
                 }
             }
             
-            if (hitZombie) {
-                bulletIt = bullets.erase(bulletIt);
-                delete bullet;
-            } else {
-                ++bulletIt;
+            // Update wave manager and UI
+            if (waveManager) {
+                waveManager->Update(deltaTime);
+                
+                // Update UI with wave info
+                if (ui) {
+                    ui->UpdateWaveInfo(
+                        waveManager->GetCurrentWave(),
+                        waveManager->GetZombiesRemaining(),
+                        waveManager->GetWaveDelay()  // This will get either the wave delay timer or 0
+                    );
+                }
+                
+                // Check for weapon unlocks and display notifications
+                if (ui && waveManager->HasNewWeaponUnlock()) {
+                    int currentWave = waveManager->GetCurrentWave();
+                    if (currentWave == WaveConfig::RIFLE_UNLOCK_WAVE) {
+                        ui->ShowNotification("Rifle Unlocked! Press 2 to equip");
+                    }
+                    else if (currentWave == WaveConfig::SHOTGUN_UNLOCK_WAVE) {
+                        ui->ShowNotification("Shotgun Unlocked! Press 3 to equip");
+                    }
+                    waveManager->AcknowledgeWeaponUnlock();
+                }
+                
+                // Spawn zombies if needed
+                if (waveManager->ShouldSpawnZombie()) {
+                    // Spawn entire group at once
+                    int groupSize = waveManager->GetCurrentGroupSize();
+                    for (int i = 0; i < groupSize; i++) {
+                        SpawnZombie();
+                    }
+                }
             }
-        }
-    }
 
-    if (chunkManager) { // Update ChunkManager
-        chunkManager->Update(deltaTime);
-    }
-    
-    // Update camera to follow the player's center
-    if (player && camera) { 
-        // Camera follows the logical player position, which is now wrapped.
-        camera->Update(player->GetX(), player->GetY(), deltaTime);
+            // Update UI notifications
+            if (ui) {
+                ui->UpdateNotification(deltaTime);
+            }
+
+            // Update zombies through the pool
+            if (zombiePool) {
+                zombiePool->Update(deltaTime, player);                // Check collision with player's bullets
+                auto& bullets = player->GetBullets();
+                for (auto bulletIt = bullets.begin(); bulletIt != bullets.end();) {
+                    Bullet* bullet = *bulletIt;
+                    if (!bullet->IsActive()) {
+                        ++bulletIt;
+                        continue;
+                    }
+
+                    // Let the zombie pool handle bullet collisions and death
+                    bool hitZombie = false;
+                    SDL_Rect bulletRect = bullet->GetHitbox();
+                    SDL_Point bulletPos = { static_cast<int>(bullet->GetX()), static_cast<int>(bullet->GetY()) };
+                    
+                    for (Zombie* zombie : zombiePool->GetActiveZombies()) {
+                        if (!zombie->IsDead() && zombie->CheckCollisionWithBullet(bullet)) {
+                            // Note: TakeDamage is now handled inside CheckCollisionWithBullet
+                            bullet->Deactivate();
+                            hitZombie = true;
+                            break;
+                        }
+                    }
+                    
+                    if (hitZombie) {
+                        bulletIt = bullets.erase(bulletIt);
+                        delete bullet;
+                    } else {
+                        ++bulletIt;
+                    }
+                }
+            }
+            
+            if (chunkManager) { // Update ChunkManager
+                chunkManager->Update(deltaTime);
+            }
+            
+            // Update camera to follow the player's center
+            if (player && camera) { 
+                // Camera follows the logical player position, which is now wrapped.
+                camera->Update(player->GetX(), player->GetY(), deltaTime);
+            }
+            break;
+            
+        case GameState::PAUSED:
+            // In pause state, we don't update the game
+            break;
+            
+        case GameState::GAME_OVER:
+            // Game over state, minimal updates
+            break;
+            
+        default:
+            break;
     }
 }
 
@@ -299,19 +422,79 @@ void Game::Render() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    // Render tilemap first (background), adjusted by camera
-    if (chunkManager) {
-        chunkManager->Render(camera);
-    }    // Render zombies using the pool
-    if (zombiePool) {
-        zombiePool->Render(renderer, camera);
-    }
+    switch (currentState) {
+        case GameState::MAIN_MENU:
+            // Render the main menu
+            mainMenu->Render();
+            break;
+            
+        case GameState::LOADING:
+            // Render loading screen
+            if (loadingScreen) {
+                loadingScreen->Render(0.5f, "Loading game...");
+            }
+            break;
+            
+        case GameState::PLAYING:
+            // Render the game world
+            // Render tilemap first (background), adjusted by camera
+            if (chunkManager) {
+                chunkManager->Render(camera);
+            }
+            
+            // Render zombies using the pool
+            if (zombiePool) {
+                zombiePool->Render(renderer, camera);
+            }
 
-    // Render player on top of tilemap, adjusted by camera
-    player->Render(renderer, camera);
-    
-    // Render UI with player's current health and ammo
-    ui->Render(player->GetHealth(), player->GetMaxHealth(), player->GetCurrentAmmo(), player->GetMaxAmmo());
+            // Render player on top of tilemap, adjusted by camera
+            if (player) {
+                player->Render(renderer, camera);
+            }
+            
+            // Render UI with player's current health and ammo
+            if (ui && player) {
+                ui->Render(player->GetHealth(), player->GetMaxHealth(), player->GetCurrentAmmo(), player->GetMaxAmmo());
+            }
+            break;
+              case GameState::PAUSED:
+            // First render the game world (frozen)
+            if (chunkManager) {
+                chunkManager->Render(camera);
+            }
+            
+            if (zombiePool) {
+                zombiePool->Render(renderer, camera);
+            }
+            
+            if (player) {
+                player->Render(renderer, camera);
+            }
+            
+            if (ui && player) {
+                ui->Render(player->GetHealth(), player->GetMaxHealth(), player->GetCurrentAmmo(), player->GetMaxAmmo());
+                // Render pause screen overlay and text
+                ui->RenderPauseScreen();
+            }
+            break;
+              case GameState::GAME_OVER:
+            // Render game over screen with stats
+            if (ui && waveManager) {
+                // Get stats for the game over screen
+                int waveReached = waveManager->GetCurrentWave();
+                
+                // Use the updated method with only wave information
+                ui->RenderGameOverScreen(waveReached);
+            } else {
+                // Fallback if UI isn't initialized
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                SDL_RenderClear(renderer);
+            }
+            break;
+            
+        default:
+            break;
+    }
 
     SDL_RenderPresent(renderer);
 }
@@ -322,22 +505,42 @@ void Game::Run() {
         float deltaTime = (currentTime - previousTime) / 1000.0f;
         previousTime = currentTime;
 
-        // Add deltaTime to accumulator
-        accumulator += deltaTime;
-
-        // Handle events
+        // Cap deltaTime to prevent physics issues after long pauses
+        if (deltaTime > 0.25f) {
+            deltaTime = 0.25f;
+        }        // Process input
         HandleEvents();
-
-        // Update with fixed time step
-        while (accumulator >= FIXED_TIME_STEP) {
-            Update(FIXED_TIME_STEP);
-            accumulator -= FIXED_TIME_STEP;
+        
+        // Handle state-specific updates
+        switch (currentState) {
+            case GameState::MAIN_MENU:
+                // Update handled in Update method below
+                Update(deltaTime);
+                break;
+                
+            case GameState::PLAYING:
+                // Update game with fixed time step
+                accumulator += deltaTime;
+                while (accumulator >= FIXED_TIME_STEP) {
+                    Update(FIXED_TIME_STEP);
+                    accumulator -= FIXED_TIME_STEP;
+                }
+                break;
+                
+            case GameState::PAUSED:
+                // No updates when paused
+                break;
+                
+            case GameState::GAME_OVER:
+                // Minimal updates for game over screen
+                break;
+                
+            default:
+                break;
         }
 
-        // Render
-        Render();
-
-        // Cap frame rate
+        // Render the current state
+        Render();        // Cap frame rate
         int frameTime = SDL_GetTicks() - currentTime;
         if (frameTime < FRAME_TIME) {
             SDL_Delay(FRAME_TIME - frameTime);
@@ -346,6 +549,12 @@ void Game::Run() {
 }
 
 void Game::Cleanup() {    
+    // Clean up main menu
+    if (mainMenu) {
+        delete mainMenu;
+        mainMenu = nullptr;
+    }
+    
     // Clean up zombie pool
     if (zombiePool) {
         try {
