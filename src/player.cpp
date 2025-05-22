@@ -309,7 +309,8 @@ void Player::Update(float deltaTime) {
         if (reloadTimer <= 0) {
             isReloading = false;
             // Refill ammo
-            switch (currentWeapon) {                case WeaponType::PISTOL:
+            switch (currentWeapon) {                
+                case WeaponType::PISTOL:
                     pistolAmmo = WeaponConfig::Pistol::MAX_AMMO;
                     break;
                 case WeaponType::RIFLE:
