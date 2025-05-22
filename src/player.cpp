@@ -371,7 +371,7 @@ void Player::Update(float deltaTime) {
     float dy = mouseY - y;
     rotation = (atan2(dy, dx) * 180.0f / M_PI);
 
-    // Update destination rectangle position
+    // Adjusting the hitbox position to be centered on the player
     destRect.x = static_cast<int>(x - destRect.w / 2);
     destRect.y = static_cast<int>(y - destRect.h / 2);
 }

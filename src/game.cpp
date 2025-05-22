@@ -79,6 +79,18 @@ bool Game::Initialize() {
         return false;
     }
     
+    // Initialize SDL_mixer for audio
+    if (Mix_Init(MIX_INIT_MP3) == 0) {
+        std::cerr << "SDL_mixer initialization failed: " << Mix_GetError() << std::endl;
+        return false;
+    }
+    
+    // Open audio device for playback
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+        std::cerr << "SDL_mixer audio opening failed: " << Mix_GetError() << std::endl;
+        return false;
+    }
+    
     // Initialize the loading screen AFTER TTF initialization
     loadingScreen = std::make_unique<LoadingScreen>(renderer);
     
@@ -191,7 +203,8 @@ void Game::InitializeGameState() {
         std::cout << "Game: Creating zombie pool..." << std::endl;
         loadingScreen->Render(0.6f, "Creating zombie pool...");        // Create zombies gradually to show progress
         zombiePool = new ZombiePool(renderer, ZOMBIE_POOL_SIZE);
-        for(size_t i = 0; i < ZOMBIE_POOL_SIZE; i++) {        zombiePool->AddZombie(); // Add zombies one by one
+        for(size_t i = 0; i < ZOMBIE_POOL_SIZE; i++) {        
+            zombiePool->AddZombie(); // Add zombies one by one
             if(i % 10 == 0 || i == ZOMBIE_POOL_SIZE - 1) { // Update progress every 10 zombies and at the end
                 float progress = 0.6f + (0.3f * static_cast<float>(i + 1) / ZOMBIE_POOL_SIZE);
                 loadingScreen->Render(progress, "Creating zombie pool... " + 
@@ -787,13 +800,15 @@ void Game::Cleanup() {
     if (renderer) {
         SDL_DestroyRenderer(renderer);
         renderer = nullptr;
-    }
-
-    if (window) {
+    }    if (window) {
         SDL_DestroyWindow(window);
         window = nullptr;
     }
 
+    // Cleanup SDL subsystems in reverse order of initialization
+    Mix_CloseAudio();
+    Mix_Quit();
+    TTF_Quit();
     IMG_Quit();
     SDL_Quit();
 }
