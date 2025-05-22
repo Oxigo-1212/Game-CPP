@@ -56,6 +56,9 @@ private:
     static constexpr float FORMATION_RADIUS = 300.0f;
     static constexpr float FORMATION_WEIGHT = 0.8f;
 
+    // Collision constants
+   
+
 public:
     Zombie(SDL_Renderer* renderer, float startX, float startY);
     ~Zombie();

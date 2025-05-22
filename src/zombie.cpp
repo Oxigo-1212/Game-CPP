@@ -2,24 +2,7 @@
 #include <cmath>
 #include <iostream>
 
-/**
- * @brief Constructor for the Zombie class
- * 
- * Creates a new zombie enemy with initial properties and behaviors:
- * - Initializes position, rotation, and movement properties
- * - Sets up health and attack parameters
- * - Configures animation system for different states (move, attack)
- * - Creates hitbox for collision detection
- * - Loads all required textures and sprites
- * 
- * Each zombie uses flocking behavior to move in groups and surrounds
- * the player in realistic formations. They can attack when in range and
- * receive damage/knockback from player weapons.
- * 
- * @param renderer The SDL renderer used for drawing the zombie
- * @param startX Initial X-coordinate for spawn position
- * @param startY Initial Y-coordinate for spawn position
- */
+
 Zombie::Zombie(SDL_Renderer* renderer, float startX, float startY) 
     : renderer(renderer), x(startX), y(startY), rotation(0.0f),
       health(STARTING_HEALTH), isDead(false), speed(100.0f), isAttacking(false), lastAttackTime(0),
@@ -210,6 +193,29 @@ void Zombie::Update(float deltaTime, Player* player, const std::vector<Zombie*>&
     // Update attack state
     bool wasAttacking = isAttacking;
     if (CheckCollisionWithPlayer(player)) {
+        
+        float player_current_X = player->GetX();
+        float player_current_Y = player->GetY();
+
+        // Vector from player to zombie (this is the direction zombie should be pushed)
+        float push_vec_X = x - player_current_X;
+        float push_vec_Y = y - player_current_Y;
+
+        float distance_to_player_at_collision = std::sqrt(push_vec_X * push_vec_X + push_vec_Y * push_vec_Y);
+
+        if (distance_to_player_at_collision > 0.001f) { // Check to avoid division by zero
+            
+            float norm_push_X = push_vec_X / (distance_to_player_at_collision+1);
+            float norm_push_Y = push_vec_Y / (distance_to_player_at_collision+1); // Create dampening effect
+
+            // Apply pushback
+            x += norm_push_X * SEPARATION_WEIGHT ;
+            y += norm_push_Y * SEPARATION_WEIGHT;
+
+            // Update hitbox immediately after position change due to pushback
+            hitbox.x = static_cast<int>(x - hitbox.w / 2);
+            hitbox.y = static_cast<int>(y - hitbox.h / 2);
+        }
         Uint32 currentTime = SDL_GetTicks();          
           if (currentTime - lastAttackTime >= ATTACK_COOLDOWN) {
             isAttacking = true;
