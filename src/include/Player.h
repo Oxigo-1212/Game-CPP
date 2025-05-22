@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_mixer.h> // Add SDL_mixer for audio
 #include <string>
 #include <vector>
 #include <map>
@@ -32,6 +33,21 @@ private:    // Health constants
     static constexpr int SHOOT_FRAME_COUNT = 3;
     static constexpr int RELOAD_FRAME_COUNT = 15;
     static constexpr float DEFAULT_FRAME_DURATION = 0.05f;
+
+    // Debug visualization flags
+    bool showDebugVisuals;        // Master toggle for all debug visualizations
+    bool showDebugHitbox;         // Toggle for hitbox visualization
+    bool showDebugAimingLine;     // Toggle for aiming line visualization
+    bool showDebugMuzzlePosition; // Toggle for muzzle position visualization
+
+    // Audio properties
+    Mix_Chunk* pistolShotSound;
+    Mix_Chunk* rifleShotSound;
+    Mix_Chunk* shotgunShotSound;
+    Mix_Chunk* pistolReloadSound;
+    Mix_Chunk* rifleReloadSound;
+    Mix_Chunk* shotgunReloadSound;
+    bool soundEnabled;             // Toggle for sound effects
 
     SDL_Renderer* renderer;  // Store renderer for shooting
     UI* ui;  // UI reference for notifications
@@ -91,6 +107,7 @@ private:    // Health constants
     void PreloadAllWeaponAnimations(SDL_Renderer* renderer);
     void LoadWeaponAnimations(SDL_Renderer* renderer, WeaponType weapon);
     void UpdateAnimationReferences();
+    void LoadSoundEffects();
 
 public:
     Player(SDL_Renderer* renderer, WaveManager* waveManager, UI* ui, float startX = 400.0f, float startY = 300.0f);
@@ -107,12 +124,18 @@ public:
     int GetHealth() const { return currentHealth; }
     int GetMaxHealth() const { return MAX_HEALTH; }
     void TakeDamage(int amount);
-    void Heal(int amount);    // Weapon methods
+    void Heal(int amount);
+    
+    // Weapon methods
     void SwitchWeapon(WeaponType weapon);
     int GetCurrentAmmo() const;
     int GetMaxAmmo() const;
     float GetCurrentFireRate() const;
     float GetCurrentReloadTime() const;
+    
+    // Sound methods
+    void ToggleSound() { soundEnabled = !soundEnabled; }
+    bool IsSoundEnabled() const { return soundEnabled; }
     
     // Wave manager methods
     void SetWaveManager(WaveManager* newWaveManager) { waveManager = newWaveManager; }
