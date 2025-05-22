@@ -6,7 +6,7 @@
 Zombie::Zombie(SDL_Renderer* renderer, float startX, float startY) 
     : renderer(renderer), x(startX), y(startY), rotation(0.0f),
       health(STARTING_HEALTH), isDead(false), speed(100.0f), isAttacking(false), lastAttackTime(0),
-      currentFrame(0), frameTimer(0.0f), frameDuration(DEFAULT_FRAME_DURATION),
+      showDebugHitbox(false), currentFrame(0), frameTimer(0.0f), frameDuration(DEFAULT_FRAME_DURATION),
       knockbackVelocityX(0.0f), knockbackVelocityY(0.0f), knockbackDuration(0.0f) {
     
     // Initialize hitbox
@@ -261,23 +261,23 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
 
     // Update destination rectangle position for rendering
     destRect.x = static_cast<int>(x - destRect.w / 2 - camera->GetX());
-    destRect.y = static_cast<int>(y - destRect.h / 2 - camera->GetY());
-
-    // Render the current frame with rotation
+    destRect.y = static_cast<int>(y - destRect.h / 2 - camera->GetY());    // Render the current frame with rotation
     SDL_Point center = { destRect.w / 2, destRect.h / 2 }; 
     SDL_RenderCopyEx(renderer, currentFrames[currentFrame], &srcRect, &destRect, 
                      rotation, &center, SDL_FLIP_NONE);
 
-    // Hitbox for debugging
-    /*SDL_Rect hitboxScreen = {
-        static_cast<int>(hitbox.x - camera->GetX()),
-        static_cast<int>(hitbox.y - camera->GetY()),
-        hitbox.w,
-        hitbox.h
-    };
-      // Draw hitbox outline in red (RGB: 255, 0, 0)
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);  // Pure red with full opacity
-    SDL_RenderDrawRect(renderer, &hitboxScreen);*/
+    // Render hitbox visualization if debug mode is enabled
+    if (showDebugHitbox) {
+        SDL_Rect hitboxScreen = {
+            static_cast<int>(hitbox.x - camera->GetX()),
+            static_cast<int>(hitbox.y - camera->GetY()),
+            hitbox.w,
+            hitbox.h
+        };
+        // Draw hitbox outline in red (RGB: 255, 0, 0)
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);  // Pure red with full opacity
+        SDL_RenderDrawRect(renderer, &hitboxScreen);
+    }
     
     // Draw hit points above the zombie
     SDL_Rect healthBar = {

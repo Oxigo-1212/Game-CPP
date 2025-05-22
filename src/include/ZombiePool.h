@@ -17,11 +17,14 @@ public:
     const std::vector<Zombie*>& GetActiveZombies() const { return activeZombies; }
     size_t GetActiveCount() const { return activeZombies.size(); }
 
-    // New methods for enhanced pooling
+    // New methods for enhanced pooling    
     void RecycleDistantZombies(Player* player, float maxDistance);
     void OptimizeZombieDistribution(Player* player);
     void PrewarmPool();
     void AddZombie();  // New method for incremental creation
+    
+    // Debug visualization methods
+    void SetDebugHitboxForAll(bool show);
 
 private:
     static constexpr float RECYCLE_DISTANCE = 1200.0f;  // Distance at which zombies get recycled

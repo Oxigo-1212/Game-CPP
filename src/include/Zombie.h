@@ -14,8 +14,7 @@
 class Zombie {
 private:
     SDL_Rect hitbox;
-    float x, y;
-    float rotation;  // Angle in degrees
+    float x, y;    float rotation;  // Angle in degrees
     int health;
     bool isDead;
     float speed;
@@ -23,6 +22,9 @@ private:
     Uint32 lastAttackTime;
     const Uint32 ATTACK_COOLDOWN = 1000; // 1 second cooldown between attacks    // Damage and health constants
     static constexpr int STARTING_HEALTH = 8;      // Zombie starting health
+    
+    // Debug visualization
+    bool showDebugHitbox;
 
     // Knockback properties
     float knockbackVelocityX;
@@ -71,9 +73,12 @@ public:
     SDL_Rect GetHitbox() const { return hitbox; }
     float GetX() const { return x; }
     float GetY() const { return y; }
-    float GetRotation() const { return rotation; }
-    void Reset(float newX, float newY, float speedMultiplier = 1.0f);    // Reset zombie position and stats
+    float GetRotation() const { return rotation; }    void Reset(float newX, float newY, float speedMultiplier = 1.0f);    // Reset zombie position and stats
     void TakeDamage(float damageX, float damageY, bool isShotgunPellet, Bullet* bullet);
+    
+    // Debug visualization methods
+    void SetDebugHitbox(bool show) { showDebugHitbox = show; }
+    bool IsShowingDebugHitbox() const { return showDebugHitbox; }
 
 private:
     void ApplyFlockingBehavior(const std::vector<Zombie*>& zombies, float& dx, float& dy);

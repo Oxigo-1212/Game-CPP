@@ -59,7 +59,6 @@ public:
     // Game state UI methods    
     void RenderPauseScreen();   
     void RenderGameOverScreen(int waveReached);
-    void RenderHighScoreScreen();
     void SaveHighScore(int waveReached);
     
     // High score system management
@@ -72,8 +71,8 @@ private:
     void RenderNotification();
     void RenderWaveInfo();
     void UpdateTextTextures(int currentHealth, int maxHealth, int currentAmmo, int maxAmmo);
+    void LoadHighScores();
     SDL_Texture* CreateTextTexture(const std::string& text);
     SDL_Texture* CreateTextTexture(const std::string& text, SDL_Color color, int fontSize = FONT_SIZE);
-    void LoadHighScores();
     std::string GetCurrentDateTimeString();
 };

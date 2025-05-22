@@ -20,7 +20,7 @@ void ZombiePool::AddZombie() {
 }
 
 ZombiePool::~ZombiePool() {
-    try {
+    try {        
         for (Zombie* zombie : pool) {
             delete zombie;
         }
@@ -29,6 +29,15 @@ ZombiePool::~ZombiePool() {
         isInUse.clear();
     } catch (...) {
         std::cerr << "ZombiePool: Error during cleanup" << std::endl;
+    }
+}
+
+void ZombiePool::SetDebugHitboxForAll(bool show) {
+    // Set debug hitbox flag for all zombies in the pool
+    for (auto* zombie : pool) {
+        if (zombie) {
+            zombie->SetDebugHitbox(show);
+        }
     }
 }
 

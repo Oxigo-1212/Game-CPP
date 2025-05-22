@@ -412,8 +412,7 @@ void Game::Update(float deltaTime) {    switch (currentState) {
 
             // Update UI notifications
             if (ui) {
-                ui->UpdateNotification(deltaTime);
-            }
+                ui->UpdateNotification(deltaTime);            }
 
             // Update zombies through the pool
             if (zombiePool) {
@@ -446,6 +445,18 @@ void Game::Update(float deltaTime) {    switch (currentState) {
                     } else {
                         ++bulletIt;
                     }
+                }
+            }
+              // Sync debug state between player and zombies
+            if (player && zombiePool) {
+                // Check if player's debug visualization state has changed
+                static bool lastDebugState = false;
+                bool currentDebugState = player->IsShowingDebugVisuals();
+                
+                if (currentDebugState != lastDebugState) {
+                    // State changed, update zombies
+                    zombiePool->SetDebugHitboxForAll(currentDebugState);
+                    lastDebugState = currentDebugState;
                 }
             }
             

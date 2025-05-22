@@ -34,14 +34,14 @@ ChunkManager::~ChunkManager() {
     // Wait for any pending loading tasks to complete
     for (auto& task_pair : loadingTasks) {
         if (task_pair.second.valid()) {
-            task_pair.second.wait(); // Wait for the future to become ready
+            task_pair.second.wait(); // Wair the background thread complete
         }
     }
     loadingTasks.clear();
 
     // Clear any chunks that were loaded but not yet activated
     {
-        std::lock_guard<std::mutex> lock(readyChunksMutex);
+        std::lock_guard<std::mutex> lock(readyChunksMutex); //Lock the mutex to safely access readyToActivateChunks without data race
         for (auto& pair : readyToActivateChunks) {
             delete pair.second; // Delete TileMap instance
         }
@@ -65,7 +65,7 @@ ChunkCoord ChunkManager::GetChunkCoordFromWorldPos(float worldX, float worldY) {
     }
     int chunkX = static_cast<int>(std::floor(worldX / chunkWidthPixels));
     int chunkY = static_cast<int>(std::floor(worldY / chunkHeightPixels));
-    return {chunkX, chunkY};
+    return {chunkX, chunkY}; // Chunk coordinates
 }
 
 void ChunkManager::LoadChunk(int chunkGridX, int chunkGridY) {
@@ -79,12 +79,12 @@ void ChunkManager::LoadChunk(int chunkGridX, int chunkGridY) {
         std::cerr << "ChunkManager: Cannot start load chunk, blueprint not ready." << std::endl;
         return;
     }
-
+    //Force run on a separate thread
+    // This is a simple example of using std::async to run the loading in a separate thread.
     loadingTasks[coord] = std::async(std::launch::async, [this, chunkGridX, chunkGridY, coord]() {
         TileMap* newChunk = new TileMap(this->renderer); 
 
-        // Simulate loading delay for testing
-        // std::this_thread::sleep_for(std::chrono::milliseconds(500)); 
+        
 
         bool success = true;
         // SDL_CreateTextureFromSurface should ideally be on the main thread.
@@ -218,7 +218,7 @@ void ChunkManager::Render(Camera* camera) {
     for (const auto& pair : activeChunks) {
         ChunkCoord coord = pair.first;
         TileMap* chunk = pair.second;
-
+        // Convert chunk coordinates to world coordinates
         int worldOffsetX = coord.x * chunkWidthPixels;
         int worldOffsetY = coord.y * chunkHeightPixels;
 

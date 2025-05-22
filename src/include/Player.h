@@ -157,8 +157,10 @@ public:
         hitbox.w = hitboxWidth;
         hitbox.h = hitboxHeight;
         return hitbox;
-    }
-    bool IsDead() const { return currentHealth <= 0; }
+    }    bool IsDead() const { return currentHealth <= 0; }
+    
+    // Debug visualization accessor
+    bool IsShowingDebugVisuals() const { return showDebugVisuals; }
     
 private:
     void LoadTextures(SDL_Renderer* renderer);

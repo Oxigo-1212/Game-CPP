@@ -90,9 +90,10 @@ bool TileMap::LoadMap(const char* path) {
 // MODIFIED: Added worldOffsetX and worldOffsetY parameters
 void TileMap::Render(Camera* camera, int worldOffsetX, int worldOffsetY) { 
     if (!tileset || map.empty() || !camera || tileWidth == 0 || tileHeight == 0) return;
-
-    float camX = camera->GetX();
+// Camera's X and Y are absolute world coordinates
+    float camX = camera->GetX(); 
     float camY = camera->GetY();
+// Get camera's view dimensions
     int camViewWidth = camera->GetViewWidth();
     int camViewHeight = camera->GetViewHeight();
 
@@ -103,23 +104,28 @@ void TileMap::Render(Camera* camera, int worldOffsetX, int worldOffsetY) {
     // (worldOffsetX + tile_col * tileWidth, worldOffsetY + tile_row * tileHeight)
 
     // Effective camera position relative to this chunk's origin
+    // Calculate the effective camera position by subtracting the world offset
+    // from the camera's position. This gives us the camera's position relative to this chunk coordinate system.
+    
     float effectiveCamX = camX - worldOffsetX;
     float effectiveCamY = camY - worldOffsetY;
 
+    // Calculate the start and end tile indices based on the camera's position
     int startCol = static_cast<int>(effectiveCamX / tileWidth);
     int endCol = static_cast<int>((effectiveCamX + camViewWidth) / tileWidth) + 1;
     int startRow = static_cast<int>(effectiveCamY / tileHeight);
     int endRow = static_cast<int>((effectiveCamY + camViewHeight) / tileHeight) + 1;
 
     // Clamp to this chunk's boundaries (0 to mapWidth/mapHeight in tiles)
+    //Prevent out of tilemap's bounds rendering
     int clampedStartCol = std::max(0, startCol);
     int clampedEndCol = std::min(mapWidth, endCol);
     int clampedStartRow = std::max(0, startRow);
     int clampedEndRow = std::min(mapHeight, endRow);
 
-    for (int r = clampedStartRow; r < clampedEndRow; ++r) {
-        for (int c = clampedStartCol; c < clampedEndCol; ++c) {
-            int tileId = map[r][c];
+    for (int row = clampedStartRow; row < clampedEndRow; ++row) {
+        for (int column = clampedStartCol; column < clampedEndCol; ++column) {
+            int tileId = map[row][column];
             if (tileId < 0) continue; // Skip empty tiles (-1 or other invalid)
 
             SDL_Rect srcRect;
@@ -129,11 +135,11 @@ void TileMap::Render(Camera* camera, int worldOffsetX, int worldOffsetY) {
             srcRect.h = tileHeight;
 
             SDL_Rect dstRect;
-            // Calculate the screen position of the tile.
-            // Tile's world X = worldOffsetX + c * tileWidth
+            // Calculate the screen position of the tile relative to the camera
+            // Tile's world X = worldOffsetX + columnolumn * tileWidth
             // Tile's screen X = (worldOffsetX + c * tileWidth) - camX
-            dstRect.x = static_cast<int>(std::round((worldOffsetX + c * tileWidth) - camX));
-            dstRect.y = static_cast<int>(std::round((worldOffsetY + r * tileHeight) - camY));
+            dstRect.x = static_cast<int>(std::round((worldOffsetX + column * tileWidth) - camX));
+            dstRect.y = static_cast<int>(std::round((worldOffsetY + row * tileHeight) - camY));
             dstRect.w = tileWidth;
             dstRect.h = tileHeight;
 

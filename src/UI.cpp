@@ -15,9 +15,6 @@ UI::UI(SDL_Renderer* renderer) : renderer(renderer), font(nullptr),
     notificationTexture(nullptr), notificationTimer(0.0f)
 {
     std::cout << "UI constructor called" << std::endl;
-    // Load high scores when UI is initialized
-    // The UI class is the single source of truth for high scores.
-    // It provides them to MainMenu through GetHighScores() to avoid duplication.
     LoadHighScores();
     std::cout << "After LoadHighScores, highScores.size() = " << highScores.size() << std::endl;
 }
@@ -78,7 +75,7 @@ SDL_Texture* UI::CreateTextTexture(const std::string& text, SDL_Color color, int
     bool tempFont = false;
     
     if (fontSize != FONT_SIZE) {
-        renderFont = TTF_OpenFont("assets/fonts/Call of Ops Duty.otf", fontSize);
+        renderFont = TTF_OpenFont("assets/fonts/Call of Ops Duty.otf", fontSize); //Try to load new font size
         if (!renderFont) {
             renderFont = font; // Fallback to default font if we can't load the requested size
         } else {
@@ -99,7 +96,7 @@ SDL_Texture* UI::CreateTextTexture(const std::string& text, SDL_Color color, int
     SDL_FreeSurface(surface);
     
     if (tempFont) {
-        TTF_CloseFont(renderFont);
+        TTF_CloseFont(renderFont); // Clean up temporary font
     }
 
     if (!texture) {
@@ -121,7 +118,7 @@ void UI::UpdateTextTextures(int currentHealth, int maxHealth, int currentAmmo, i
     healthTexture = CreateTextTexture(healthText.str());
     SDL_QueryTexture(healthTexture, nullptr, nullptr, &healthRect.w, &healthRect.h);
     healthRect.x = MARGIN_X;
-    healthRect.y = MARGIN_Y - healthRect.h - TEXT_SPACING;
+    healthRect.y = MARGIN_Y - healthRect.h - TEXT_SPACING;// Adjusted to be above the health bar
 
     // Update ammo text
     ammoText << "Ammo: " << currentAmmo << "/" << maxAmmo;
@@ -131,7 +128,7 @@ void UI::UpdateTextTextures(int currentHealth, int maxHealth, int currentAmmo, i
     ammoTexture = CreateTextTexture(ammoText.str());
     SDL_QueryTexture(ammoTexture, nullptr, nullptr, &ammoRect.w, &ammoRect.h);
     ammoRect.x = MARGIN_X;
-    ammoRect.y = MARGIN_Y + BAR_HEIGHT + TEXT_SPACING;
+    ammoRect.y = MARGIN_Y + BAR_HEIGHT + TEXT_SPACING;// Adjusted to be below the health bar
 }
 
 void UI::RenderHealthBar(int currentHealth, int maxHealth) {
@@ -154,8 +151,8 @@ void UI::RenderHealthBar(int currentHealth, int maxHealth) {
     if (healthPercentage > 0.5f) {
         SDL_SetRenderDrawColor(renderer, barFillColor.r, barFillColor.g, barFillColor.b, barFillColor.a);
     } else {
-        SDL_SetRenderDrawColor(renderer, 255, 
-            static_cast<Uint8>(255 * (healthPercentage * 2)), 0, 255);
+        // Transition from yellow to red
+        SDL_SetRenderDrawColor(renderer, 255, static_cast<Uint8>(255 * (healthPercentage * 2)), 0, 255);
     }
     SDL_RenderFillRect(renderer, &fillRect);
 }
@@ -177,7 +174,8 @@ void UI::ShowNotification(const std::string& text) {
     
     // Create new texture
     notificationTexture = CreateTextTexture(text);
-    if (notificationTexture) {        int w, h;
+    if (notificationTexture) {        
+        int w, h;
         SDL_QueryTexture(notificationTexture, nullptr, nullptr, &w, &h);
         notificationRect = {
             (Constants::WINDOW_WIDTH - w) / 2,  // Center horizontally
@@ -204,6 +202,8 @@ void UI::UpdateNotification(float deltaTime) {
 void UI::RenderNotification() {
     if (notificationTimer > 0 && notificationTexture) {
         // Calculate alpha based on remaining time
+        // Fade out effect
+        // Alpha value ranges from 255 (fully visible) to 0 (fully transparent)
         int alpha = static_cast<int>(255 * std::min(1.0f, notificationTimer / NOTIFICATION_DURATION));
         SDL_SetTextureAlphaMod(notificationTexture, alpha);
         SDL_RenderCopy(renderer, notificationTexture, nullptr, &notificationRect);
@@ -220,7 +220,7 @@ void UI::UpdateWaveInfo(int currentWave, int zombiesRemaining, float spawnTimer)
     // Format wave info text
     std::stringstream ss;
     if (zombiesRemaining <= 0) {
-        // Between waves, show countdown
+        /// If no zombies remaining, show next wave info
         ss << "Wave " << currentWave << " | Next Wave in " << std::fixed << std::setprecision(1) << spawnTimer << "s";
     } else {
         // During wave, just show wave number
@@ -268,9 +268,9 @@ void UI::Render(int currentHealth, int maxHealth, int currentAmmo, int maxAmmo) 
 
 // New methods for game state screens
 
-void UI::RenderPauseScreen() {    // Semi-transparent black overlay
+void UI::RenderPauseScreen() {    // Create semi-transparent black overlay
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 128);
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);//Use alpha value to blend
     SDL_Rect fullScreen = {0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT};
     SDL_RenderFillRect(renderer, &fullScreen);
     
@@ -278,14 +278,14 @@ void UI::RenderPauseScreen() {    // Semi-transparent black overlay
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
     
     // "PAUSED" title
-    SDL_Color pauseColor = {255, 255, 255, 255}; // White
-    SDL_Texture* pauseTexture = CreateTextTexture("PAUSED", pauseColor, 72);
+    SDL_Color textpauseColor = {255, 255, 255, 255}; // White
+    SDL_Texture* pauseTexture = CreateTextTexture("PAUSED", textpauseColor, 72);
     if (pauseTexture) {
         int textWidth, textHeight;
         SDL_QueryTexture(pauseTexture, nullptr, nullptr, &textWidth, &textHeight);        
         SDL_Rect textRect = {
-            (Constants::WINDOW_WIDTH - textWidth) / 2,
-            Constants::WINDOW_HEIGHT / 3 - textHeight / 2,
+            (Constants::WINDOW_WIDTH - textWidth) / 2,  // Center horizontally
+            Constants::WINDOW_HEIGHT / 3 - textHeight / 2,// Center vertically
             textWidth,
             textHeight
         };
@@ -297,7 +297,7 @@ void UI::RenderPauseScreen() {    // Semi-transparent black overlay
     // Instructions
     SDL_Texture* instructionTexture = CreateTextTexture(
         "Press ESC to Resume - Press M for Main Menu", 
-        pauseColor,
+        textpauseColor,
         28
     );
     
@@ -306,7 +306,7 @@ void UI::RenderPauseScreen() {    // Semi-transparent black overlay
         SDL_QueryTexture(instructionTexture, nullptr, nullptr, &textWidth, &textHeight);        
         SDL_Rect textRect = {
             (Constants::WINDOW_WIDTH - textWidth) / 2,
-            Constants::WINDOW_HEIGHT / 2,
+            Constants::WINDOW_HEIGHT / 2, //Under the pause text
             textWidth,
             textHeight
         };
@@ -380,129 +380,7 @@ void UI::RenderGameOverScreen(int waveReached) {
     }
 }
 
-void UI::RenderHighScoreScreen() {
-    // Black background
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-      // Debug - check if renderer is valid
-    if (!renderer) {
-        std::cerr << "ERROR: Renderer is null in RenderHighScoreScreen" << std::endl;
-        return;
-    }
-    
-    std::cout << "Rendering high scores screen..." << std::endl;
-    
-    // "HIGH SCORES" title
-    SDL_Color titleColor = {255, 215, 0, 255}; // Gold
-    SDL_Texture* titleTexture = CreateTextTexture("HIGH SCORES", titleColor, 72);
-    
-    if (titleTexture) {
-        int textWidth, textHeight;
-        SDL_QueryTexture(titleTexture, nullptr, nullptr, &textWidth, &textHeight);        
-        SDL_Rect textRect = {
-            (Constants::WINDOW_WIDTH - textWidth) / 2,
-            Constants::WINDOW_HEIGHT / 6 - textHeight / 2,
-            textWidth,
-            textHeight
-        };
-        
-        SDL_RenderCopy(renderer, titleTexture, nullptr, &textRect);
-        SDL_DestroyTexture(titleTexture);
-    } else {
-        std::cerr << "Failed to create HIGH SCORES title texture" << std::endl;
-    }
-    
-    // Render scores - if no scores available, show a message
-    SDL_Color scoreColor = {255, 255, 255, 255}; // White
-    
-    if (highScores.empty()) {
-        SDL_Texture* noScoreTexture = CreateTextTexture("No scores yet. Play the game!", scoreColor, 36);
-        
-        if (noScoreTexture) {
-            int textWidth, textHeight;
-            SDL_QueryTexture(noScoreTexture, nullptr, nullptr, &textWidth, &textHeight);            
-            SDL_Rect textRect = {
-                (Constants::WINDOW_WIDTH - textWidth) / 2,
-                Constants::WINDOW_HEIGHT / 2 - textHeight / 2,
-                textWidth,
-                textHeight
-            };
-            
-            SDL_RenderCopy(renderer, noScoreTexture, nullptr, &textRect);
-            SDL_DestroyTexture(noScoreTexture);
-        }
-    } else {
-        // Header row
-        SDL_Color headerColor = {180, 180, 180, 255}; // Light gray
-        SDL_Texture* headerTexture = CreateTextTexture("RANK       WAVE       DATE", headerColor, 32);
-        
-        if (headerTexture) {
-            int textWidth, textHeight;
-            SDL_QueryTexture(headerTexture, nullptr, nullptr, &textWidth, &textHeight);            
-            SDL_Rect textRect = {
-                (Constants::WINDOW_WIDTH - textWidth) / 2,
-                Constants::WINDOW_HEIGHT / 3 - textHeight,
-                textWidth,
-                textHeight
-            };
-            
-            SDL_RenderCopy(renderer, headerTexture, nullptr, &textRect);
-            SDL_DestroyTexture(headerTexture);        }        // Display scores (up to 10)
-        int yPos = Constants::WINDOW_HEIGHT / 3 + 20;
-        // Get up to 10 scores to display
-        const int MAX_SCORES_TO_DISPLAY = 10;
-        int scoreCount = (highScores.size() <= MAX_SCORES_TO_DISPLAY) ? 
-                          static_cast<int>(highScores.size()) : MAX_SCORES_TO_DISPLAY;
-        
-        std::cout << "Rendering " << scoreCount << " scores" << std::endl;
-        
-        for (int i = 0; i < scoreCount; ++i) {
-            std::stringstream ss;
-            ss << std::left << std::setw(8) << (i + 1) << std::setw(8) << highScores[i].wave << highScores[i].date;
-            
-            std::string scoreText = ss.str();
-            std::cout << "Score line: " << scoreText << std::endl;
-            
-            SDL_Texture* scoreTexture = CreateTextTexture(scoreText, scoreColor, 28);
-            
-            if (scoreTexture) {
-                int textWidth, textHeight;
-                SDL_QueryTexture(scoreTexture, nullptr, nullptr, &textWidth, &textHeight);                
-                SDL_Rect textRect = {
-                    (Constants::WINDOW_WIDTH - textWidth) / 2,
-                    yPos,
-                    textWidth,
-                    textHeight
-                };
-                
-                SDL_RenderCopy(renderer, scoreTexture, nullptr, &textRect);
-                SDL_DestroyTexture(scoreTexture);
-                
-                yPos += textHeight + 20; // Space between scores
-            } else {
-                std::cerr << "Failed to create texture for score " << i << std::endl;
-            }
-        }
-    }
-    
-    // Back button at bottom
-    SDL_Color backColor = {150, 150, 150, 255}; // Gray
-    SDL_Texture* backTexture = CreateTextTexture("Press ESC to return to Main Menu", backColor, 24);
-    
-    if (backTexture) {
-        int textWidth, textHeight;
-        SDL_QueryTexture(backTexture, nullptr, nullptr, &textWidth, &textHeight);        
-        SDL_Rect textRect = {
-            (Constants::WINDOW_WIDTH - textWidth) / 2,
-            Constants::WINDOW_HEIGHT * 5/6,
-            textWidth,
-            textHeight
-        };
-        
-        SDL_RenderCopy(renderer, backTexture, nullptr, &textRect);
-        SDL_DestroyTexture(backTexture);
-    }
-}
+
 
 void UI::SaveHighScore(int waveReached) {
     std::cout << "Saving score: Wave " << waveReached << std::endl;
@@ -554,17 +432,14 @@ void UI::LoadHighScores() {
     std::cout << "Attempting to load high scores..." << std::endl;
     
     // Try multiple paths to find the scores file
-    std::vector<std::string> possiblePaths = {
+    std::vector<std::string> Path = {
         "d:/Game-CPP/score/scores.txt",
-        "./score/scores.txt",
-        "../score/scores.txt",
-        "score/scores.txt"
     };
     
     bool fileOpened = false;
     std::ifstream file;
     
-    for (const auto& path : possiblePaths) {
+    for (const auto& path : Path) {
         file.open(path);
         if (file.is_open()) {
             std::cout << "Successfully opened scores file at: " << path << std::endl;
