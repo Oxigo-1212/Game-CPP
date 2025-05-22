@@ -14,7 +14,7 @@ Player::Player(SDL_Renderer* renderer, float startX, float startY)
     
     LoadTextures(renderer);
     
-    // Initialize key states
+    // Khởi tạo trạng thái phím
     for (int i = 0; i < SDL_NUM_SCANCODES; i++) {
         keyStates[i] = false;
     }
@@ -42,16 +42,9 @@ Player::~Player() {
     bullets.clear();
 }
 
-void Player::LoadAnimationSet(SDL_Renderer* renderer, std::vector<SDL_Texture*>& frames, 
-                            const std::string& path, int frameCount) {
-    // First, clean up any existing textures in the frames vector
-    for (auto tex : frames) {
-        if (tex) {
-            SDL_DestroyTexture(tex);
-        }
-    }
-    frames.clear(); // Now clear the vector of pointers
-    
+void Player::LoadAnimationSet(SDL_Renderer* renderer, std::vector<SDL_Texture*>& frames, const std::string& path, int frameCount) {
+    frames.clear();  // Clear any existing frames
+
     for (int i = 0; i < frameCount; i++) {
         std::string fullPath = path + std::to_string(i) + ".png";
         SDL_Surface* surface = IMG_Load(fullPath.c_str());
