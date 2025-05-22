@@ -12,10 +12,9 @@ Game::Game() :
     window(nullptr), 
     renderer(nullptr),
     currentState(GameState::MAIN_MENU),
-    mainMenu(nullptr),
-    previousTime(0),
+    mainMenu(nullptr),    previousTime(0),
     accumulator(0.0f),
-    FPS(60),
+    FPS(120),
     FRAME_TIME(1000 / FPS),
     FIXED_TIME_STEP(1.0f / 60.0f),
     player(nullptr),
@@ -65,25 +64,23 @@ bool Game::Initialize() {
         window,
         -1,
         SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
-    );
-
-    if (!renderer) {
+    );    if (!renderer) {
         std::cerr << "Renderer creation failed: " << SDL_GetError() << std::endl;
         return false;
     }
-    
-    // Initialize the loading screen right after creating the renderer
-    loadingScreen = std::make_unique<LoadingScreen>(renderer);
     
     if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
         std::cerr << "SDL_image initialization failed: " << IMG_GetError() << std::endl;
         return false;
     }
-      // Initialize SDL_ttf
+      // Initialize SDL_ttf (BEFORE creating the loading screen)
     if (TTF_Init() != 0) {
         std::cerr << "SDL_ttf initialization failed: " << TTF_GetError() << std::endl;
         return false;
     }
+    
+    // Initialize the loading screen AFTER TTF initialization
+    loadingScreen = std::make_unique<LoadingScreen>(renderer);
     
     // Initialize UI first since MainMenu needs it for high scores
     ui = new UI(renderer);
@@ -117,6 +114,11 @@ void Game::UpdateWindowSize(int width, int height) {
     // Update camera dimensions if it exists
     if (camera) {
         camera->SetViewDimensions(width, height);
+    }
+    
+    // Update main menu layout if it exists
+    if (mainMenu && currentState == GameState::MAIN_MENU) {
+        mainMenu->UpdateLayout();
     }
     
     // No need to update UI elements as they now use the dynamic Constants values
@@ -217,10 +219,8 @@ void Game::InitializeGameState() {
         loadingScreen->Render(1.0f, "Game initialization complete!");
         
         // Short delay to show completion
-        SDL_Delay(500);
-
-        // Clear loading screen
-        loadingScreen.reset();
+        SDL_Delay(500);        // Keep loadingScreen available for future use, but don't reset it completely
+        // This ensures we maintain a valid loading screen for subsequent game restarts
     } 
     catch (const std::exception& e) {
         std::cerr << "Failed to initialize game state: " << e.what() << std::endl;

@@ -20,13 +20,14 @@ void LoadingScreen::Render(float progress, const std::string& message) {
     // Clear screen
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);    // Draw loading bar background
+    // Create loading bar background rectangle (dark gray color: RGB 64, 64, 64)
     SDL_Rect barBg = {
         (Constants::WINDOW_WIDTH - BAR_WIDTH) / 2,
         (Constants::WINDOW_HEIGHT - BAR_HEIGHT) / 2,
         BAR_WIDTH,
         BAR_HEIGHT
     };
-    SDL_SetRenderDrawColor(renderer, 64, 64, 64, 255);
+    SDL_SetRenderDrawColor(renderer, 64, 64, 64, 255); 
     SDL_RenderFillRect(renderer, &barBg);
 
     // Draw loading bar progress

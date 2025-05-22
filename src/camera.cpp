@@ -21,6 +21,7 @@ void Camera::SetPosition(float newX, float newY) {
     y = newY;
 }
 
+//pass in the player coordinates
 void Camera::Update(float targetCenterX, float targetCenterY, float deltaTime) {
     // Calculate the desired top-left position for the camera to center the target.
     float desiredX = targetCenterX - viewWidth / 2.0f;
@@ -36,15 +37,7 @@ void Camera::Update(float targetCenterX, float targetCenterY, float deltaTime) {
     x = lerp(x, desiredX, t);
     y = lerp(y, desiredY, t);
 
-    // Optional: Clamp camera to world boundaries if you have a fixed-size world.
-    // Example:
-    // float worldMinX = 0.0f;
-    // float worldMinY = 0.0f;
-    // float worldMaxX = 2000.0f; // Example world width
-    // float worldMaxY = 1500.0f; // Example world height
-    //
-    // x = std::max(worldMinX, std::min(x, worldMaxX - viewWidth));
-    // y = std::max(worldMinY, std::min(y, worldMaxY - viewHeight));
+    
 }
 
 SDL_FPoint Camera::WorldToScreen(float worldX, float worldY) const {

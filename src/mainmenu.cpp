@@ -108,17 +108,16 @@ bool MainMenu::Initialize() {
     if (!titleTexture) {
         std::cerr << "Failed to create title texture: " << SDL_GetError() << std::endl;
         return false;
-    }    // Create buttons - centered horizontally, stacked vertically
+    }    // Create buttons with initial positions (will be updated by UpdateLayout)
     int buttonX = (Constants::WINDOW_WIDTH - BUTTON_WIDTH) / 2;
     int buttonY = Constants::WINDOW_HEIGHT / 2; // Start buttons from middle of screen
     
     startButton = new Button(renderer, buttonFont, "Start Game", buttonX, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT);
-    
-    buttonY += BUTTON_HEIGHT + BUTTON_PADDING;
     scoresButton = new Button(renderer, buttonFont, "Scores", buttonX, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT);
-    
-    buttonY += BUTTON_HEIGHT + BUTTON_PADDING;
     exitButton = new Button(renderer, buttonFont, "Exit", buttonX, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT);
+    
+    // Position all buttons correctly
+    UpdateLayout();
     
     // Optional: Load background texture
     /*
@@ -518,5 +517,28 @@ void MainMenu::SetHighScoreScale(float scale) {
             std::cerr << "Failed to reload score font with new scale: " << TTF_GetError() << std::endl;
             scoreFont = buttonFont; // Fall back to button font
         }
+    }
+}
+
+void MainMenu::UpdateLayout() {
+    // Calculate button positions based on current window dimensions
+    int buttonX = (Constants::WINDOW_WIDTH - BUTTON_WIDTH) / 2;
+    int buttonY = Constants::WINDOW_HEIGHT / 2; // Start buttons from middle of screen
+    
+    // Set positions for all buttons
+    if (startButton) {
+        startButton->SetPosition(buttonX, buttonY);
+    }
+    
+    // Move to next button position
+    buttonY += BUTTON_HEIGHT + BUTTON_PADDING;
+    if (scoresButton) {
+        scoresButton->SetPosition(buttonX, buttonY);
+    }
+    
+    // Move to next button position
+    buttonY += BUTTON_HEIGHT + BUTTON_PADDING;
+    if (exitButton) {
+        exitButton->SetPosition(buttonX, buttonY);
     }
 }

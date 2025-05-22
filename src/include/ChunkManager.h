@@ -19,20 +19,8 @@ struct ChunkCoord {
         if (x > other.x) return false;
         return y < other.y;
     }
-    // Equality operator for comparisons
-    bool operator==(const ChunkCoord& other) const {
-        return x == other.x && y == other.y;
-    }
-    // Required for std::unordered_map if we choose to use it later
-    // For std::map, only operator< is strictly needed for the key.
-    // Adding a hash struct for potential future use with unordered_map.
-    struct Hash {
-        std::size_t operator()(const ChunkCoord& coord) const {
-            auto h1 = std::hash<int>{}(coord.x);
-            auto h2 = std::hash<int>{}(coord.y);
-            return h1 ^ (h2 << 1); // Simple hash combining
-        }
-    };
+    
+
 };
 
 class ChunkManager {

@@ -20,10 +20,11 @@ public:
     void RenderHighScores(); // New method to render high scores
     bool ShouldStartGame() const;
     bool ShouldExitGame() const;    bool ShouldShowScores() const;
-    void Reset(); // Reset menu state
-
-    // Set the scale factor for high scores display
+    void Reset(); // Reset menu state    // Set the scale factor for high scores display
     void SetHighScoreScale(float scale);
+    
+    // Update button positions when window size changes
+    void UpdateLayout();
     
 private:
     // Using the ScoreEntry struct from UI class instead of duplicate definition
