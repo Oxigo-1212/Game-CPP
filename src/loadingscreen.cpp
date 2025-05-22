@@ -43,7 +43,8 @@ void LoadingScreen::Render(float progress, const std::string& message) {
     if (font) {
         SDL_Color textColor = {255, 255, 255, 255};
         SDL_Surface* textSurface = TTF_RenderText_Blended(font, message.c_str(), textColor);
-        if (textSurface) {            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+        if (textSurface) {            
+            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
             if (textTexture) {
                 SDL_Rect textRect = {
                     (Constants::WINDOW_WIDTH - textSurface->w) / 2,
