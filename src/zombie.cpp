@@ -252,9 +252,8 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
         hitbox.w,
         hitbox.h
     };
-    
-    // Draw hitbox outline in red
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+      // Draw hitbox outline in red (RGB: 255, 0, 0)
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);  // Pure red with full opacity
     SDL_RenderDrawRect(renderer, &hitboxScreen);
     
     // Draw hit points above the zombie
@@ -264,14 +263,13 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
         hitboxScreen.w,
         5
     };
-    
-    // Health bar background (red)
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+      // Health bar background (pure red)
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);  // RGB: 255, 0, 0 - Pure red for empty health
     SDL_RenderFillRect(renderer, &healthBar);
     
-    // Health bar foreground (green)
+    // Health bar foreground (pure green)
     healthBar.w = static_cast<int>((health / 5.0f) * hitboxScreen.w);
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);  // RGB: 0, 255, 0 - Pure green for health
     SDL_RenderFillRect(renderer, &healthBar);
 }
 

@@ -520,7 +520,7 @@ void Game::SpawnZombie() {
 }
 
 void Game::Render() {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);  // Black background with full opacity
     SDL_RenderClear(renderer);
 
     switch (currentState) {

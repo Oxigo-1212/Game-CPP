@@ -1,7 +1,7 @@
 all: game
 
 game: main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o loadingscreen.o button.o mainmenu.o
-	g++ -Isrc/include -o game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o loadingscreen.o button.o mainmenu.o -Lsrc/lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf
+	g++ -Isrc/include -o game main.o game.o player.o bullet.o ui.o tilemap.o camera.o ChunkManager.o zombie.o zombiepool.o wavemanager.o loadingscreen.o button.o mainmenu.o -Lsrc/lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer
 
 game.o: src/game.cpp src/include/Game.h src/include/Player.h src/include/UI.h src/include/LoadingScreen.h src/include/MainMenu.h src/include/GameState.h
 	g++ -Isrc/include -c src/game.cpp -o game.o

@@ -11,7 +11,10 @@ Player::Player(SDL_Renderer* renderer, WaveManager* waveManager, UI* ui, float s
     rotation(0.0f), mouseX(0), mouseY(0), shootTimer(0.0f),
     currentState(PlayerState::IDLE), currentWeapon(WeaponType::PISTOL), isMouseDown(false), isReloading(false), 
     reloadTimer(0.0f), pistolAmmo(WeaponConfig::Pistol::MAX_AMMO), rifleAmmo(WeaponConfig::Rifle::MAX_AMMO), shotgunAmmo(WeaponConfig::Shotgun::MAX_AMMO),
-    currentHealth(STARTING_HEALTH) {
+    currentHealth(STARTING_HEALTH), showDebugVisuals(false), showDebugHitbox(false), 
+    showDebugAimingLine(false), showDebugMuzzlePosition(false), soundEnabled(true),
+    pistolShotSound(nullptr), rifleShotSound(nullptr), shotgunShotSound(nullptr),
+    pistolReloadSound(nullptr), rifleReloadSound(nullptr), shotgunReloadSound(nullptr) {
     
     // Initialize key states
     for (bool& state : keyStates) {
@@ -27,6 +30,9 @@ Player::Player(SDL_Renderer* renderer, WaveManager* waveManager, UI* ui, float s
 
     // First load all weapon animations
     LoadTextures(renderer);
+
+    // Load sound effects
+    LoadSoundEffects();
 
     // Then set the current weapon's animation references
     idleFrames = idleAnimations[currentWeapon];
@@ -55,6 +61,14 @@ Player::~Player() {
         delete bullet;
     }
     bullets.clear();
+    
+    // Clean up sound effects
+    if (pistolShotSound) Mix_FreeChunk(pistolShotSound);
+    if (rifleShotSound) Mix_FreeChunk(rifleShotSound);
+    if (shotgunShotSound) Mix_FreeChunk(shotgunShotSound);
+    if (pistolReloadSound) Mix_FreeChunk(pistolReloadSound);
+    if (rifleReloadSound) Mix_FreeChunk(rifleReloadSound);
+    if (shotgunReloadSound) Mix_FreeChunk(shotgunReloadSound);
 }
 
 void Player::LoadAnimationSet(SDL_Renderer* renderer, std::vector<SDL_Texture*>& frames, 
@@ -201,6 +215,41 @@ void Player::HandleInput(SDL_Event& event) {
                         currentFrame = 0;  // Reset animation frame
                         frameTimer = 0;    // Reset frame timer
                     }
+                }
+                // Debug visualization toggles
+                else if (event.key.keysym.scancode == SDL_SCANCODE_F1) {
+                    // Toggle master debug visualization
+                    showDebugVisuals = !showDebugVisuals;
+                    // Apply master toggle to all visualizations
+                    if (showDebugVisuals) {
+                        showDebugHitbox = true;
+                        showDebugAimingLine = true;
+                        showDebugMuzzlePosition = true;
+                        ui->ShowNotification("Debug visualizations ON");
+                    } else {
+                        showDebugHitbox = false;
+                        showDebugAimingLine = false;
+                        showDebugMuzzlePosition = false;
+                        ui->ShowNotification("Debug visualizations OFF");
+                    }
+                }
+                // Individual debug visualization toggles
+                else if (event.key.keysym.scancode == SDL_SCANCODE_F2) {
+                    showDebugHitbox = !showDebugHitbox;
+                    ui->ShowNotification(showDebugHitbox ? "Hitbox visualization ON" : "Hitbox visualization OFF");
+                }
+                else if (event.key.keysym.scancode == SDL_SCANCODE_F3) {
+                    showDebugAimingLine = !showDebugAimingLine;
+                    ui->ShowNotification(showDebugAimingLine ? "Aiming line visualization ON" : "Aiming line visualization OFF");
+                }
+                else if (event.key.keysym.scancode == SDL_SCANCODE_F4) {
+                    showDebugMuzzlePosition = !showDebugMuzzlePosition;
+                    ui->ShowNotification(showDebugMuzzlePosition ? "Muzzle position visualization ON" : "Muzzle position visualization OFF");
+                }
+                // Toggle sound effects
+                else if (event.key.keysym.scancode == SDL_SCANCODE_F5) {
+                    soundEnabled = !soundEnabled;
+                    ui->ShowNotification(soundEnabled ? "Sound effects ON" : "Sound effects OFF");
                 }
             }
             break;
@@ -371,6 +420,27 @@ void Player::Shoot() {
     currentState = PlayerState::SHOOTING;
     currentFrame = 0;
     frameTimer = 0;
+
+    // Play appropriate sound effect
+    if (soundEnabled) {
+        Mix_Chunk* soundToPlay = nullptr;
+        switch (currentWeapon) {
+            case WeaponType::RIFLE:
+                soundToPlay = rifleShotSound;
+                break;
+            case WeaponType::SHOTGUN:
+                soundToPlay = shotgunShotSound;
+                break;
+            case WeaponType::PISTOL:
+            default:
+                soundToPlay = pistolShotSound;
+                break;
+        }
+        
+        if (soundToPlay) {
+            Mix_PlayChannel(-1, soundToPlay, 0);
+        }
+    }
 
     float rotationRad = rotation * M_PI / 180.0f;
     float muzzleX = x + (muzzleOffsetX * cos(rotationRad)) - (muzzleOffsetY * sin(rotationRad));
@@ -548,27 +618,34 @@ void Player::Render(SDL_Renderer* renderer, Camera* camera) {
         screenDestRect.x = static_cast<int>((x - destRect.w / 2.0f) - camera->GetX());
         screenDestRect.y = static_cast<int>((y - destRect.h / 2.0f) - camera->GetY());
         screenDestRect.w = destRect.w; 
-        screenDestRect.h = destRect.h; 
-
-        SDL_Point center = {screenDestRect.w / 2, screenDestRect.h / 2};
+        screenDestRect.h = destRect.h;        SDL_Point center = {screenDestRect.w / 2, screenDestRect.h / 2};
         SDL_RenderCopyEx(renderer, currentTexture, &currentFrameSrcRect, &screenDestRect, 
                         rotation, &center, SDL_FLIP_NONE);
-          // Debug visualization for Player Hitbox - 60% of visual size
-        float hitboxScale = 0.6f;  // Hitbox is 60% of the sprite size
-        int hitboxWidth = static_cast<int>(destRect.w * hitboxScale);
-        int hitboxHeight = static_cast<int>(destRect.h * hitboxScale);
-        SDL_Rect playerHitboxRect = {
-            static_cast<int>(GetX() - hitboxWidth / 2.0f - camera->GetX()),
-            static_cast<int>(GetY() - hitboxHeight / 2.0f - camera->GetY()),
-            hitboxWidth,
-            hitboxHeight
-        };
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-        SDL_RenderDrawRect(renderer, &playerHitboxRect);
+                        
+        // Debug visualization for Player Hitbox - 60% of visual size
+        if (showDebugHitbox) {
+            float hitboxScale = 0.6f;  // Hitbox is 60% of the sprite size
+            int hitboxWidth = static_cast<int>(destRect.w * hitboxScale);
+            int hitboxHeight = static_cast<int>(destRect.h * hitboxScale);
+            SDL_Rect playerHitboxRect = {
+                static_cast<int>(GetX() - hitboxWidth / 2.0f - camera->GetX()),
+                static_cast<int>(GetY() - hitboxHeight / 2.0f - camera->GetY()),
+                hitboxWidth,
+                hitboxHeight
+            };
+            SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+            SDL_RenderDrawRect(renderer, &playerHitboxRect);
+        }
 
-        // Debug visualization, pass camera
-        RenderAimingLine(renderer, camera);
-        RenderMuzzlePosition(renderer, camera);
+        // Debug visualization for aiming line
+        if (showDebugAimingLine) {
+            RenderAimingLine(renderer, camera);
+        }
+        
+        // Debug visualization for muzzle position
+        if (showDebugMuzzlePosition) {
+            RenderMuzzlePosition(renderer, camera);
+        }
     }
 }
 
@@ -657,4 +734,25 @@ void Player::UpdateAnimationReferences() {
     moveFrames = moveAnimations[currentWeapon];
     shootFrames = shootAnimations[currentWeapon];
     reloadFrames = reloadAnimations[currentWeapon];
+}
+
+void Player::LoadSoundEffects() {
+    // Load pistol sounds
+    pistolShotSound = Mix_LoadWAV("assets/audios/Pistol/9mm Single.mp3");
+    pistolReloadSound = Mix_LoadWAV("assets/audios/Pistol/9mm Pistol Reload 2.mp3");
+    
+    // Load rifle sounds
+    rifleShotSound = Mix_LoadWAV("assets/audios/Rifle/762x39 Spray MP3.mp3");
+    rifleReloadSound = Mix_LoadWAV("assets/audios/Rifle/AK Reload Part 2 MP3.mp3");
+    
+    // Load shotgun sounds
+    shotgunShotSound = Mix_LoadWAV("assets/audios/Shotgun/20 Gauge Single.mp3");
+    shotgunReloadSound = Mix_LoadWAV("assets/audios/Shotgun/Single Shotgun Load.mp3");
+    
+    // Check if sound loading was successful
+    if (!pistolShotSound || !pistolReloadSound || 
+        !rifleShotSound || !rifleReloadSound || 
+        !shotgunShotSound || !shotgunReloadSound) {
+        std::cerr << "Warning: Failed to load some weapon sound effects: " << Mix_GetError() << std::endl;
+    }
 }

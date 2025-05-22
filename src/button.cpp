@@ -5,12 +5,11 @@ Button::Button(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, 
     : renderer(renderer), font(font), text(text), clicked(false), state(ButtonState::NORMAL), textTexture(nullptr)
 {
     rect = {x, y, width, height};
-    
-    // Default colors
-    normalColor = {70, 70, 70, 255};      // Dark gray
-    hoverColor = {120, 120, 120, 255};    // Medium gray
-    pressedColor = {50, 50, 50, 255};     // Darker gray
-    textColor = {255, 255, 255, 255};     // White
+      // Default colors with RGB values explained
+    normalColor = {70, 70, 70, 255};      // RGB: 70, 70, 70 - Dark gray for normal state
+    hoverColor = {120, 120, 120, 255};    // RGB: 120, 120, 120 - Medium gray for hover state
+    pressedColor = {50, 50, 50, 255};     // RGB: 50, 50, 50 - Darker gray for pressed state
+    textColor = {255, 255, 255, 255};     // RGB: 255, 255, 255 - Pure white for text
     
     CreateTextTexture();
 }
