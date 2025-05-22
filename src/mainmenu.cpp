@@ -8,7 +8,7 @@
 #include <ctime>
 #include <filesystem>
 
-MainMenu::MainMenu(SDL_Renderer* renderer) : 
+MainMenu::MainMenu(SDL_Renderer* renderer, UI* uiRef) : 
     renderer(renderer),
     titleFont(nullptr),
     buttonFont(nullptr),
@@ -17,8 +17,11 @@ MainMenu::MainMenu(SDL_Renderer* renderer) :
     backgroundTexture(nullptr),
     startButton(nullptr),
     scoresButton(nullptr),
-    exitButton(nullptr),    startGame(false),
-    exitGame(false),    showScores(false),
+    exitButton(nullptr),    
+    startGame(false),
+    exitGame(false),    
+    showScores(false),
+    ui(uiRef),
     scoreScale(1.0f) {  // Set to 100% scale as requested
     
     // Load high scores during initialization
@@ -221,6 +224,19 @@ void MainMenu::LoadHighScores() {
     
     std::cout << "MainMenu: Loading high scores..." << std::endl;
     
+    // If UI reference is available, use it to get high scores
+    if (ui) {
+        std::cout << "Using high scores from UI class" << std::endl;
+        // Make sure UI has the latest scores
+        ui->ReloadHighScores();
+        // Copy the scores from UI
+        highScores = ui->GetHighScores();
+        return;
+    }
+    
+    // Fallback to legacy loading method if no UI reference
+    std::cout << "Fallback: Loading high scores directly (no UI reference)" << std::endl;
+    
     // Try multiple paths to find the scores file
     std::vector<std::string> possiblePaths = {
         "d:/Game-CPP/score/scores.txt",
@@ -286,6 +302,10 @@ void MainMenu::LoadHighScores() {
 }
 
 void MainMenu::RenderHighScores() {
+    // Reload high scores to ensure we display the latest
+    LoadHighScores();
+    std::cout << "MainMenu: Reloaded high scores before rendering" << std::endl;
+    
     // Clear screen with a dark color
     SDL_SetRenderDrawColor(renderer, 20, 20, 40, 255); // Dark blue-ish color
     SDL_RenderClear(renderer);

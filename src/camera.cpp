@@ -9,7 +9,7 @@ Camera::Camera(float startX, float startY, int screenW, int screenH)
 
 Camera::~Camera() {}
 
-// Linear interpolation
+// Linear interpolation - smoothen camera movement
 float Camera::lerp(float start, float end, float t) const {
     if (t < 0.0f) t = 0.0f;
     if (t > 1.0f) t = 1.0f;

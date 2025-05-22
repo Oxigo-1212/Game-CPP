@@ -79,15 +79,21 @@ bool Game::Initialize() {
         std::cerr << "SDL_image initialization failed: " << IMG_GetError() << std::endl;
         return false;
     }
-    
-    // Initialize SDL_ttf
+      // Initialize SDL_ttf
     if (TTF_Init() != 0) {
         std::cerr << "SDL_ttf initialization failed: " << TTF_GetError() << std::endl;
         return false;
     }
     
-    // Initialize main menu
-    mainMenu = new MainMenu(renderer);
+    // Initialize UI first since MainMenu needs it for high scores
+    ui = new UI(renderer);
+    if (!ui->Initialize()) {
+        std::cerr << "UI initialization failed" << std::endl;
+        return false;
+    }
+    
+    // Initialize main menu with UI reference
+    mainMenu = new MainMenu(renderer, ui);
     if (!mainMenu->Initialize()) {
         std::cerr << "Main menu initialization failed" << std::endl;
         return false;
@@ -336,8 +342,13 @@ void Game::Update(float deltaTime) {    switch (currentState) {
             if (mainMenu->ShouldExitGame()) {
                 isRunning = false;
             }
-            
-            if (mainMenu->ShouldShowScores()) {
+              if (mainMenu->ShouldShowScores()) {
+                // Reload high scores before transitioning to high scores screen
+                if (ui) {
+                    ui->ReloadHighScores();
+                    std::cout << "Reloaded high scores before showing scores screen" << std::endl;
+                }
+                
                 // Transition to high scores screen
                 currentState = GameState::HIGH_SCORES;
                 // Reset the flag to prevent repeated transitions
@@ -351,6 +362,14 @@ void Game::Update(float deltaTime) {    switch (currentState) {
                 // Check if player died
                 if (player->IsDead()) {
                     std::cout << "Game Over!" << std::endl;
+                    
+                    // Save high score immediately when game ends
+                    if (ui && waveManager) {
+                        int waveReached = waveManager->GetCurrentWave();
+                        ui->SaveHighScore(waveReached);
+                        std::cout << "High score saved at game over: Wave " << waveReached << std::endl;
+                    }
+                    
                     currentState = GameState::GAME_OVER;
                     return; // Exit the function since we're changing states
                 }
@@ -583,11 +602,16 @@ void Game::Render() {
                 // Get stats for the game over screen
                 int waveReached = waveManager->GetCurrentWave();
                 
-                // Save high score
-                ui->SaveHighScore(waveReached);
+                // Note: High score is already saved when transitioning to GAME_OVER state
+                // We don't need to save it again here
                 
                 // Use the updated method with only wave information
-                ui->RenderGameOverScreen(waveReached);            } else {
+                ui->RenderGameOverScreen(waveReached);
+                // In this design:
+                // - UI class manages loading and saving high scores
+                // - MainMenu uses the UI's high scores for display
+                // This eliminates redundancy while maintaining the same functionality
+            } else {
                 // Fallback if UI isn't initialized - clear the screen with black
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
                 SDL_RenderClear(renderer);

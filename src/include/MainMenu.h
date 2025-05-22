@@ -6,10 +6,11 @@
 #include <fstream>
 #include <algorithm>
 #include "Button.h"
+#include "UI.h" // Added UI.h include
 
 class MainMenu {
 public:
-    MainMenu(SDL_Renderer* renderer);
+    MainMenu(SDL_Renderer* renderer, UI* uiRef = nullptr);
     ~MainMenu();
     
     bool Initialize();
@@ -18,19 +19,17 @@ public:
     void Render();
     void RenderHighScores(); // New method to render high scores
     bool ShouldStartGame() const;
-    bool ShouldExitGame() const;
-    bool ShouldShowScores() const;
+    bool ShouldExitGame() const;    bool ShouldShowScores() const;
     void Reset(); // Reset menu state
 
     // Set the scale factor for high scores display
     void SetHighScoreScale(float scale);
     
 private:
-    struct ScoreEntry {
-        int wave;
-        std::string date;
-    };
-      void LoadHighScores();
+    // Using the ScoreEntry struct from UI class instead of duplicate definition
+    using ScoreEntry = UI::ScoreEntry;
+    
+    void LoadHighScores();
     // Helper method to get scaled position values
     int Scale(int value) const;
     
@@ -45,11 +44,12 @@ private:
     Button* startButton;
     Button* scoresButton; // Changed from optionsButton
     Button* exitButton;
-    
-    bool startGame;
+      bool startGame;
     bool exitGame;
     bool showScores; // Added to track scores button
-      std::vector<ScoreEntry> highScores;
+    
+    UI* ui; // Reference to UI instance for high scores
+    std::vector<ScoreEntry> highScores;
     float scoreScale;     // Scale factor for high score UI
     
     // Button dimensions

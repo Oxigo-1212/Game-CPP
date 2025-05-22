@@ -2,6 +2,24 @@
 #include <cmath>
 #include <iostream>
 
+/**
+ * @brief Constructor for the Zombie class
+ * 
+ * Creates a new zombie enemy with initial properties and behaviors:
+ * - Initializes position, rotation, and movement properties
+ * - Sets up health and attack parameters
+ * - Configures animation system for different states (move, attack)
+ * - Creates hitbox for collision detection
+ * - Loads all required textures and sprites
+ * 
+ * Each zombie uses flocking behavior to move in groups and surrounds
+ * the player in realistic formations. They can attack when in range and
+ * receive damage/knockback from player weapons.
+ * 
+ * @param renderer The SDL renderer used for drawing the zombie
+ * @param startX Initial X-coordinate for spawn position
+ * @param startY Initial Y-coordinate for spawn position
+ */
 Zombie::Zombie(SDL_Renderer* renderer, float startX, float startY) 
     : renderer(renderer), x(startX), y(startY), rotation(0.0f),
       health(STARTING_HEALTH), isDead(false), speed(100.0f), isAttacking(false), lastAttackTime(0),
@@ -81,10 +99,6 @@ void Zombie::UpdateAnimation(float deltaTime) {
         
         if (currentFrame >= maxFrames) {
             currentFrame = 0;
-            if (isAttacking) {
-                // Optional: Reset attack state after animation completes
-                // isAttacking = false;
-            }
         }
     }
 }
@@ -119,6 +133,7 @@ void Zombie::Update(float deltaTime, Player* player, const std::vector<Zombie*>&
     float dx = playerX - x;
     float dy = playerY - y;
     float distanceToPlayer = std::sqrt(dx * dx + dy * dy);
+    /*create directional vector*/
 
     // Calculate rotation to face the player
     rotation = (atan2(dy, dx) * 180.0f / M_PI);  // Remove the +90 if zombie sprite faces right by default
@@ -195,7 +210,8 @@ void Zombie::Update(float deltaTime, Player* player, const std::vector<Zombie*>&
     // Update attack state
     bool wasAttacking = isAttacking;
     if (CheckCollisionWithPlayer(player)) {
-        Uint32 currentTime = SDL_GetTicks();            if (currentTime - lastAttackTime >= ATTACK_COOLDOWN) {
+        Uint32 currentTime = SDL_GetTicks();          
+          if (currentTime - lastAttackTime >= ATTACK_COOLDOWN) {
             isAttacking = true;
             lastAttackTime = currentTime;
             player->TakeDamage(WaveConfig::ZOMBIE_BASE_DAMAGE);
@@ -223,6 +239,7 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
 
     // Get current animation frame
     const auto& currentFrames = isAttacking ? attackFrames : moveFrames;
+    // Check if the current frame is valid and loaded correctly
     if (currentFrames.empty() || currentFrame >= currentFrames.size() || !currentFrames[currentFrame]) {
         // Fallback rendering if textures aren't loaded
         SDL_Rect screenRect = {
@@ -231,7 +248,7 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
             hitbox.w,
             hitbox.h
         };
-        SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255); //Create a blue rectangle to fallback on
         SDL_RenderFillRect(renderer, &screenRect);
         return;
     }
@@ -241,12 +258,12 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
     destRect.y = static_cast<int>(y - destRect.h / 2 - camera->GetY());
 
     // Render the current frame with rotation
-    SDL_Point center = { destRect.w / 2, destRect.h / 2 };
+    SDL_Point center = { destRect.w / 2, destRect.h / 2 }; 
     SDL_RenderCopyEx(renderer, currentFrames[currentFrame], &srcRect, &destRect, 
                      rotation, &center, SDL_FLIP_NONE);
 
-    // Always render hitbox for debugging
-    SDL_Rect hitboxScreen = {
+    // Hitbox for debugging
+    /*SDL_Rect hitboxScreen = {
         static_cast<int>(hitbox.x - camera->GetX()),
         static_cast<int>(hitbox.y - camera->GetY()),
         hitbox.w,
@@ -254,13 +271,13 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
     };
       // Draw hitbox outline in red (RGB: 255, 0, 0)
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);  // Pure red with full opacity
-    SDL_RenderDrawRect(renderer, &hitboxScreen);
+    SDL_RenderDrawRect(renderer, &hitboxScreen);*/
     
     // Draw hit points above the zombie
     SDL_Rect healthBar = {
-        hitboxScreen.x,
-        hitboxScreen.y - 10,
-        hitboxScreen.w,
+        static_cast<int>(hitbox.x - camera->GetX()),
+        static_cast<int>(hitbox.y - camera->GetY()),
+        hitbox.w,
         5
     };
       // Health bar background (pure red)
@@ -268,7 +285,7 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
     SDL_RenderFillRect(renderer, &healthBar);
     
     // Health bar foreground (pure green)
-    healthBar.w = static_cast<int>((health / 5.0f) * hitboxScreen.w);
+    healthBar.w = static_cast<int>((health / 5.0f) * hitbox.w);
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);  // RGB: 0, 255, 0 - Pure green for health
     SDL_RenderFillRect(renderer, &healthBar);
 }
@@ -284,8 +301,9 @@ bool Zombie::CheckCollisionWithBullet(Bullet* bullet) {
         
         // Use bullet type to determine damage and knockback
         bool isShotgunPellet = (bullet->GetBulletType() == BulletType::SHOTGUN_PELLET);
-          // Apply damage with knockback in the direction of the bullet's travel
-        TakeDamageWithKnockback(dx, dy, isShotgunPellet, bullet);
+        // Apply damage with knockback in the direction of the bullet's travel
+        
+        TakeDamage(dx, dy, isShotgunPellet, bullet);
         return true;
     }
     return false;
@@ -298,16 +316,9 @@ bool Zombie::CheckCollisionWithPlayer(Player* player) {
     return SDL_HasIntersection(&hitbox, &playerDestRect);
 }
 
-void Zombie::TakeDamage() {
-    if (isDead) return;
-    
-    health--;
-    if (health <= 0) {
-        isDead = true;
-    }
-}
 
-void Zombie::TakeDamageWithKnockback(float damageX, float damageY, bool isShotgunPellet, Bullet* bullet) {
+
+void Zombie::TakeDamage(float damageX, float damageY, bool isShotgunPellet, Bullet* bullet) {
     // Only apply knockback for shotgun pellets
     if (isShotgunPellet) {
         float force = WeaponConfig::Shotgun::KNOCKBACK_FORCE * WeaponConfig::Shotgun::KNOCKBACK_MULTIPLIER;
@@ -341,19 +352,19 @@ void Zombie::ApplyFlockingBehavior(const std::vector<Zombie*>& zombies, float& d
     float aliX = 0, aliY = 0;
     float cohX = 0, cohY = 0;
     
-    // Áp dụng cả ba hành vi đàn đông (flocking behaviors)
-    // - Separate: Giúp zombie không bị chen chúc vào nhau
-    // - Align: Điều chỉnh hướng di chuyển theo các zombie xung quanh
-    // - Cohere: Giúp zombie di chuyển về phía trung tâm của nhóm
+    // Apply all three flocking behaviors
+    // - Separate: Help zombies avoid crowding together
+    // - Align: Adjust movement direction based on nearby zombies
+    // - Cohere: Help zombies move toward the center of the group
     Separate(zombies, sepX, sepY);
     Align(zombies, aliX, aliY);
     Cohere(zombies, cohX, cohY);
 
-    // Cân đối và kết hợp các lực với trọng số tương ứng
-    dx = dx * PLAYER_ATTRACTION_WEIGHT +  // Lực cơ bản hướng về người chơi
-         sepX * SEPARATION_WEIGHT +       // Lực đẩy xa để tách biệt
-         aliX * ALIGNMENT_WEIGHT +        // Lực căn chỉnh hướng di chuyển
-         cohX * COHESION_WEIGHT;          // Lực tụ về trung tâm nhóm
+    // Balance and combine forces with corresponding weights
+    dx = dx * PLAYER_ATTRACTION_WEIGHT +  // Base force towards player
+         sepX * SEPARATION_WEIGHT +       // Repulsion force for separation
+         aliX * ALIGNMENT_WEIGHT +        // Force to align movement direction
+         cohX * COHESION_WEIGHT;         // Force to move towards group center
 
     dy = dy * PLAYER_ATTRACTION_WEIGHT +
          sepY * SEPARATION_WEIGHT +
@@ -372,20 +383,19 @@ void Zombie::Separate(const std::vector<Zombie*>& zombies, float& dx, float& dy)
             float distance = std::sqrt(distX * distX + distY * distY);
 
             if (distance < MIN_SEPARATION) {
-                // Thêm lực đẩy tỷ lệ nghịch với khoảng cách
-                // Zombie càng gần nhau, lực đẩy càng mạnh
-                dx += distX / (distance + 1);  // +1 để tránh chia cho 0
+                //Push zombies away from each other
+                dx += distX / (distance + 1);  // +1 to create dampening effect
                 dy += distY / (distance + 1);
                 count++;
             }
         }
     }
 
-    // Tính trung bình lực tách biệt
+    // AVerage the separation force
     if (count > 0) {
         dx /= count;
         dy /= count;
-        // Chuẩn hóa vector
+        // Normalize the direction vector
         float length = std::sqrt(dx * dx + dy * dy);
         if (length > 0) {
             dx /= length;
@@ -405,8 +415,8 @@ void Zombie::Align(const std::vector<Zombie*>& zombies, float& dx, float& dy) {
             float distance = std::sqrt(distX * distX + distY * distY);
 
             if (distance < NEIGHBOR_RADIUS) {
-                // Lấy hướng di chuyển đã chuẩn hóa của zombie khác
-                // để căn chỉnh hướng di chuyển của zombie hiện tại
+                //Calculate the change vector
+                // Normalize the direction vector
                 float otherDx = other->hitbox.x - other->GetX();
                 float otherDy = other->hitbox.y - other->GetY();
                 float length = std::sqrt(otherDx * otherDx + otherDy * otherDy);
@@ -419,7 +429,7 @@ void Zombie::Align(const std::vector<Zombie*>& zombies, float& dx, float& dy) {
         }
     }
 
-    // Tính trung bình hướng di chuyển của các zombie lân cận
+    // Calculate average direction
     if (count > 0) {
         dx /= count;
         dy /= count;
@@ -444,21 +454,22 @@ void Zombie::Cohere(const std::vector<Zombie*>& zombies, float& dx, float& dy) {
             if (distance < NEIGHBOR_RADIUS) {
                 centerX += other->x;
                 centerY += other->y;
+                // Di chuyển dần vào với nhau
                 count++;
             }
         }
     }
 
     if (count > 0) {
-        // Tính toán trung tâm khối lượng (center of mass)
+        // Calculating the center of mass
         centerX /= count;
         centerY /= count;
         
-        // Tìm hướng đến trung tâm khối lượng
+        // Find the direction to the center of mass
         dx = centerX - x;
         dy = centerY - y;
         
-        // Chuẩn hóa vector
+        // Vector normalized
         float length = std::sqrt(dx * dx + dy * dy);
         if (length > 0) {
             dx /= length;

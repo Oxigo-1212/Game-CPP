@@ -78,6 +78,7 @@ void ZombiePool::ReturnZombie(Zombie* zombie) {
         // Find and mark the zombie as not in use
         bool found = false;
         for (size_t i = 0; i < pool.size(); ++i) {
+            // Check if the pointer to the zombie is in the pool and is in use
             if (pool[i] == zombie) {
                 isInUse[i] = false;
                 found = true;
@@ -199,7 +200,7 @@ bool ZombiePool::IsZombieTooFar(const Zombie* zombie, const Player* player, floa
     float dy = zombie->GetY() - player->GetY();
     float distSquared = dx * dx + dy * dy;
     
-    return distSquared > maxDistance * maxDistance;
+    return distSquared > maxDistance * maxDistance; //Optimize by comparing squared distances
 }
 
 void ZombiePool::UpdateZombieDistances(Player* player) {
@@ -209,12 +210,16 @@ void ZombiePool::UpdateZombieDistances(Player* player) {
 
 SDL_Point ZombiePool::GetOptimalSpawnPosition(Player* player) const {
     // Generate a position at optimal distance from player
-    float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * M_PI;
-    float distance = OPTIMAL_DISTANCE * (0.8f + 0.4f * static_cast<float>(rand()) / RAND_MAX);
+    //rand() / RAND_MAX gives a float between 0 and 1
+    // Multiply by 2 * PI to get a random angle
+    float randomAngle = static_cast<float>(rand()) / RAND_MAX * 2.0f * M_PI;
+    // Calculate distance based on optimal distance and some randomness
+    // This will create a range between 0.6 * OPTIMAL_DISTANCE and 1.4 * OPTIMAL_DISTANCE
+    float distance = OPTIMAL_DISTANCE * (1.0f + 0.4f * static_cast<float>(rand()) / RAND_MAX);
     
     SDL_Point pos;
-    pos.x = static_cast<int>(player->GetX() + cos(angle) * distance);
-    pos.y = static_cast<int>(player->GetY() + sin(angle) * distance);
+    pos.x = static_cast<int>(player->GetX() + cos(randomAngle) * distance);
+    pos.y = static_cast<int>(player->GetY() + sin(randomAngle) * distance);
     
     return pos;
 }

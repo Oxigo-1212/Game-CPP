@@ -8,6 +8,12 @@
 #include "Constants.h"
 
 class UI {
+public:    // Score tracking structure - made public so it can be shared
+    struct ScoreEntry {
+        int wave;
+        std::string date;
+    };
+
 private:    // Constants
     static constexpr int MARGIN_X = 20;
     static constexpr int MARGIN_Y = 50;  // Moved down from 20 to 50
@@ -38,12 +44,6 @@ private:    // Constants
     float notificationTimer;
     SDL_Texture* notificationTexture;
     SDL_Rect notificationRect;
-
-    // Score tracking
-    struct ScoreEntry {
-        int wave;
-        std::string date;
-    };
     std::vector<ScoreEntry> highScores;
 
 public:
@@ -56,11 +56,15 @@ public:
     void UpdateNotification(float deltaTime);
     void UpdateWaveInfo(int currentWave, int zombiesRemaining, float spawnTimer);
     
-    // Game state UI methods
-    void RenderPauseScreen();
+    // Game state UI methods    
+    void RenderPauseScreen();   
     void RenderGameOverScreen(int waveReached);
     void RenderHighScoreScreen();
     void SaveHighScore(int waveReached);
+    
+    // High score system management
+    const std::vector<ScoreEntry>& GetHighScores();
+    void ReloadHighScores();
 
 private:
     void RenderHealthBar(int currentHealth, int maxHealth);

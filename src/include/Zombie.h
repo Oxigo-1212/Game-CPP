@@ -64,14 +64,13 @@ public:
     void Render(SDL_Renderer* renderer, Camera* camera);
     bool CheckCollisionWithBullet(Bullet* bullet);
     bool CheckCollisionWithPlayer(Player* player);
-    void TakeDamage();
     bool IsDead() const { return isDead; }
     SDL_Rect GetHitbox() const { return hitbox; }
     float GetX() const { return x; }
     float GetY() const { return y; }
     float GetRotation() const { return rotation; }
     void Reset(float newX, float newY, float speedMultiplier = 1.0f);    // Reset zombie position and stats
-    void TakeDamageWithKnockback(float damageX, float damageY, bool isShotgunPellet, Bullet* bullet);
+    void TakeDamage(float damageX, float damageY, bool isShotgunPellet, Bullet* bullet);
 
 private:
     void ApplyFlockingBehavior(const std::vector<Zombie*>& zombies, float& dx, float& dy);

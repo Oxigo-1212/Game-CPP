@@ -618,7 +618,8 @@ void Player::Render(SDL_Renderer* renderer, Camera* camera) {
         screenDestRect.x = static_cast<int>((x - destRect.w / 2.0f) - camera->GetX());
         screenDestRect.y = static_cast<int>((y - destRect.h / 2.0f) - camera->GetY());
         screenDestRect.w = destRect.w; 
-        screenDestRect.h = destRect.h;        SDL_Point center = {screenDestRect.w / 2, screenDestRect.h / 2};
+        screenDestRect.h = destRect.h;        
+        SDL_Point center = {screenDestRect.w / 2, screenDestRect.h / 2};
         SDL_RenderCopyEx(renderer, currentTexture, &currentFrameSrcRect, &screenDestRect, 
                         rotation, &center, SDL_FLIP_NONE);
                         

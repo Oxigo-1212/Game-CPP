@@ -16,6 +16,8 @@ UI::UI(SDL_Renderer* renderer) : renderer(renderer), font(nullptr),
 {
     std::cout << "UI constructor called" << std::endl;
     // Load high scores when UI is initialized
+    // The UI class is the single source of truth for high scores.
+    // It provides them to MainMenu through GetHighScores() to avoid duplication.
     LoadHighScores();
     std::cout << "After LoadHighScores, highScores.size() = " << highScores.size() << std::endl;
 }
@@ -529,19 +531,23 @@ void UI::SaveHighScore(int waveReached) {
     
     // Save to file
     std::filesystem::create_directories("score"); // Ensure directory exists
-    
-    std::ofstream file("score/scores.txt");
+      std::ofstream file("score/scores.txt");
     if (file.is_open()) {
         for (const auto& score : highScores) {
             file << score.wave << "," << score.date << std::endl;
         }
+        // Ensure the file is flushed to disk immediately
+        file.flush();
         file.close();
         std::cout << "High scores saved successfully" << std::endl;
+        
+        // Note: The UI class is the single source of truth for high scores.
+        // It handles saving them, and MainMenu class accesses them through GetHighScores()
+        // This avoids duplicate loading code while preserving the separation of responsibilities
     } else {
         std::cerr << "Failed to save high scores: Could not open file" << std::endl;
     }
 }
-
 void UI::LoadHighScores() {
     highScores.clear();
     
@@ -608,13 +614,6 @@ void UI::LoadHighScores() {
                   });
     } else {
         std::cerr << "Failed to open scores.txt file from any known location" << std::endl;
-        
-        // If we can't open the file, add some default scores for testing
-        // This helps verify if the rendering works even without a valid file
-        std::cout << "Adding default test scores" << std::endl;
-        highScores.push_back({8, "2025-05-22"});
-        highScores.push_back({7, "2025-05-21"});
-        highScores.push_back({6, "2025-05-20"});
     }
 }
 
@@ -625,5 +624,15 @@ std::string UI::GetCurrentDateTimeString() {
     std::stringstream ss;
     ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d");
     return ss.str();
+}
+
+// New method to provide access to high scores
+const std::vector<UI::ScoreEntry>& UI::GetHighScores() {
+    return highScores;
+}
+
+// Force reload high scores from file
+void UI::ReloadHighScores() {
+    LoadHighScores();
 }
 
