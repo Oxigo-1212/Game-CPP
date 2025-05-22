@@ -1,5 +1,6 @@
 #include "include/Zombie.h"
 #include <cmath>
+#include <iostream>
 
 Zombie::Zombie(SDL_Renderer* renderer, float startX, float startY) 
     : renderer(renderer), x(startX), y(startY), rotation(0.0f),
@@ -7,9 +8,9 @@ Zombie::Zombie(SDL_Renderer* renderer, float startX, float startY)
       currentFrame(0), frameTimer(0.0f), frameDuration(DEFAULT_FRAME_DURATION),
       knockbackVelocityX(0.0f), knockbackVelocityY(0.0f), knockbackDuration(0.0f) {
     
-    // Khởi tạo hitbox
-    hitbox.w = 50;  // chiều rộng của zombie
-    hitbox.h = 50;  // chiều cao của zombie
+    // Initialize hitbox
+    hitbox.w = 50;  // width of zombie
+    hitbox.h = 50;  // height of zombie
     hitbox.x = static_cast<int>(x - hitbox.w / 2);
     hitbox.y = static_cast<int>(y - hitbox.h / 2);
 
@@ -17,7 +18,7 @@ Zombie::Zombie(SDL_Renderer* renderer, float startX, float startY)
 }
 
 Zombie::~Zombie() {
-    // Dọn dẹp các texture hoạt ảnh
+    // Cleanup animation textures
     for (SDL_Texture* tex : moveFrames) {
         if (tex) SDL_DestroyTexture(tex);
     }
@@ -27,24 +28,24 @@ Zombie::~Zombie() {
 }
 
 void Zombie::LoadTextures() {
-    // Tải hoạt ảnh di chuyển
+    // Load move animation
     LoadAnimationSet(moveFrames, "assets/zombie/move/", "zombie_move_", MOVE_FRAME_COUNT);
-    // Tải hoạt ảnh tấn công
+    // Load attack animation
     LoadAnimationSet(attackFrames, "assets/zombie/attack/", "zombie_attack_", ATTACK_FRAME_COUNT);
 
-    // Thiết lập hình chữ nhật nguồn và đích
+    // Set up source and destination rectangles
     if (!moveFrames.empty() && moveFrames[0]) {
         SDL_QueryTexture(moveFrames[0], nullptr, nullptr, &srcRect.w, &srcRect.h);
         srcRect.x = 0;
         srcRect.y = 0;
         
-        // Co dãn sprite để phù hợp với kích thước người chơi (khoảng 64x64)
-        float scale = 0.5f;  // Điều chỉnh để phù hợp với kích thước người chơi
+        // Scale the sprite to match player size (approximately 64x64)
+        float scale = 0.5f;  // Adjust this to match player size
         destRect.w = static_cast<int>(srcRect.w * scale);
         destRect.h = static_cast<int>(srcRect.h * scale);
         
-        // Cập nhật hitbox để phù hợp với kích thước sprite
-        hitbox.w = static_cast<int>(destRect.w * 0.6f);  // Làm hitbox nhỏ hơn sprite một chút
+        // Update hitbox to match the sprite size
+        hitbox.w = static_cast<int>(destRect.w * 0.6f);  // Make hitbox slightly smaller than sprite
         hitbox.h = static_cast<int>(destRect.h * 0.6f);
     }
 }
@@ -81,7 +82,7 @@ void Zombie::UpdateAnimation(float deltaTime) {
         if (currentFrame >= maxFrames) {
             currentFrame = 0;
             if (isAttacking) {
-                // Tùy chọn: Đặt lại trạng thái tấn công sau khi hoàn thành hoạt ảnh
+                // Optional: Reset attack state after animation completes
                 // isAttacking = false;
             }
         }
@@ -91,39 +92,38 @@ void Zombie::UpdateAnimation(float deltaTime) {
 void Zombie::Update(float deltaTime, Player* player, const std::vector<Zombie*>& zombies) {
     if (isDead) return;
 
-    // Xử lý hiệu ứng bị đẩy lùi
+    // Handle knockback effect
     if (knockbackDuration > 0) {
         x += knockbackVelocityX * deltaTime;
         y += knockbackVelocityY * deltaTime;
         knockbackDuration -= deltaTime;
         
-        // Cập nhật hitbox trong khi bị đẩy lùi
+        // Update hitbox during knockback
         hitbox.x = static_cast<int>(x - hitbox.w / 2);
         hitbox.y = static_cast<int>(y - hitbox.h / 2);
         
-        // Nếu thời gian bị đẩy lùi kết thúc, đặt lại vận tốc
+        // If knockback is done, reset velocities
         if (knockbackDuration <= 0) {
             knockbackVelocityX = 0;
             knockbackVelocityY = 0;
         }
         
-        // Vẫn cập nhật hoạt ảnh ngay cả khi bị đẩy lùi
+        // Still update animation even during knockback
         UpdateAnimation(deltaTime);
-        return;  // Bỏ qua di chuyển bình thường khi đang bị đẩy lùi
+        return;  // Skip normal movement while being knocked back
     }
 
-    // Lấy vị trí người chơi và tính toán hướng
+    // Get player position and calculate direction
     float playerX = player->GetX();
     float playerY = player->GetY();
-      // Calculate distance to player
     float dx = playerX - x;
     float dy = playerY - y;
     float distanceToPlayer = std::sqrt(dx * dx + dy * dy);
 
-    // Tính toán góc quay để đối mặt với người chơi
-    rotation = (atan2(dy, dx) * 180.0f / M_PI);  // Bỏ +90 nếu sprite zombie mặc định quay sang phải
+    // Calculate rotation to face the player
+    rotation = (atan2(dy, dx) * 180.0f / M_PI);  // Remove the +90 if zombie sprite faces right by default
 
-    // Tính toán hướng cơ bản dựa trên độ ưu tiên và đội hình
+    // Calculate base direction based on priority and formation
     if (distanceToPlayer < CLOSE_RANGE) {
         // Tầm gần: Tấn công trực tiếp
         if (distanceToPlayer > 0) {
@@ -188,44 +188,43 @@ void Zombie::Update(float deltaTime, Player* player, const std::vector<Zombie*>&
     x += dx * speed * deltaTime;
     y += dy * speed * deltaTime;
 
-    // Cập nhật vị trí hitbox để ở giữa zombie
+    // Update hitbox position to be centered on the zombie
     hitbox.x = static_cast<int>(x - hitbox.w / 2);
     hitbox.y = static_cast<int>(y - hitbox.h / 2);
 
-    // Cập nhật trạng thái tấn công
+    // Update attack state
     bool wasAttacking = isAttacking;
     if (CheckCollisionWithPlayer(player)) {
-        Uint32 currentTime = SDL_GetTicks();
-        if (currentTime - lastAttackTime >= ATTACK_COOLDOWN) {
+        Uint32 currentTime = SDL_GetTicks();            if (currentTime - lastAttackTime >= ATTACK_COOLDOWN) {
             isAttacking = true;
             lastAttackTime = currentTime;
             player->TakeDamage(WaveConfig::ZOMBIE_BASE_DAMAGE);
             if (!wasAttacking) {
-                // Đặt lại hoạt ảnh khi bắt đầu tấn công
+                // Reset animation when starting to attack
                 currentFrame = 0;
                 frameTimer = 0;
             }
         }
     } else {
         if (wasAttacking) {
-            // Đặt lại hoạt ảnh khi ngừng tấn công
+            // Reset animation when stopping attack
             isAttacking = false;
             currentFrame = 0;
             frameTimer = 0;
         }
     }
 
-    // Cập nhật hoạt ảnh
+    // Update animation
     UpdateAnimation(deltaTime);
 }
 
 void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
     if (isDead) return;
 
-    // Lấy frame hoạt ảnh hiện tại
+    // Get current animation frame
     const auto& currentFrames = isAttacking ? attackFrames : moveFrames;
     if (currentFrames.empty() || currentFrame >= currentFrames.size() || !currentFrames[currentFrame]) {
-        // Hiển thị dự phòng nếu texture không được tải
+        // Fallback rendering if textures aren't loaded
         SDL_Rect screenRect = {
             static_cast<int>(hitbox.x - camera->GetX()),
             static_cast<int>(hitbox.y - camera->GetY()),
@@ -237,16 +236,16 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
         return;
     }
 
-    // Cập nhật vị trí hình chữ nhật đích cho việc render
+    // Update destination rectangle position for rendering
     destRect.x = static_cast<int>(x - destRect.w / 2 - camera->GetX());
     destRect.y = static_cast<int>(y - destRect.h / 2 - camera->GetY());
 
-    // Render frame hiện tại với góc quay
+    // Render the current frame with rotation
     SDL_Point center = { destRect.w / 2, destRect.h / 2 };
     SDL_RenderCopyEx(renderer, currentFrames[currentFrame], &srcRect, &destRect, 
                      rotation, &center, SDL_FLIP_NONE);
 
-    // Luôn hiển thị hitbox để debug
+    // Always render hitbox for debugging
     SDL_Rect hitboxScreen = {
         static_cast<int>(hitbox.x - camera->GetX()),
         static_cast<int>(hitbox.y - camera->GetY()),
@@ -254,11 +253,11 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
         hitbox.h
     };
     
-    // Vẽ đường viền hitbox màu đỏ
+    // Draw hitbox outline in red
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     SDL_RenderDrawRect(renderer, &hitboxScreen);
     
-    // Vẽ thanh máu phía trên zombie
+    // Draw hit points above the zombie
     SDL_Rect healthBar = {
         hitboxScreen.x,
         hitboxScreen.y - 10,
@@ -266,11 +265,11 @@ void Zombie::Render(SDL_Renderer* renderer, Camera* camera) {
         5
     };
     
-    // Thanh máu nền (màu đỏ)
+    // Health bar background (red)
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     SDL_RenderFillRect(renderer, &healthBar);
     
-    // Thanh máu phía trước (màu xanh lá)
+    // Health bar foreground (green)
     healthBar.w = static_cast<int>((health / 5.0f) * hitboxScreen.w);
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
     SDL_RenderFillRect(renderer, &healthBar);
@@ -281,13 +280,13 @@ bool Zombie::CheckCollisionWithBullet(Bullet* bullet) {
     
     SDL_Rect bulletHitbox = bullet->GetHitbox();
     if (SDL_HasIntersection(&hitbox, &bulletHitbox)) {
-        // Tính toán hướng từ đạn đến zombie cho hiệu ứng đẩy lùi
+        // Calculate direction from bullet to zombie for knockback
         float dx = x - bullet->GetX();
         float dy = y - bullet->GetY();
         
-        // Sử dụng loại đạn để xác định sát thương và lực đẩy lùi
+        // Use bullet type to determine damage and knockback
         bool isShotgunPellet = (bullet->GetBulletType() == BulletType::SHOTGUN_PELLET);
-          // Gây sát thương với hiệu ứng đẩy lùi theo hướng bay của đạn
+          // Apply damage with knockback in the direction of the bullet's travel
         TakeDamageWithKnockback(dx, dy, isShotgunPellet, bullet);
         return true;
     }
@@ -311,22 +310,22 @@ void Zombie::TakeDamage() {
 }
 
 void Zombie::TakeDamageWithKnockback(float damageX, float damageY, bool isShotgunPellet, Bullet* bullet) {
-    // Chỉ áp dụng đẩy lùi cho đạn shotgun
+    // Only apply knockback for shotgun pellets
     if (isShotgunPellet) {
         float force = WeaponConfig::Shotgun::KNOCKBACK_FORCE * WeaponConfig::Shotgun::KNOCKBACK_MULTIPLIER;
         
-        // Tính toán hướng đẩy lùi
+        // Calculate knockback direction
         float length = std::sqrt(damageX * damageX + damageY * damageY);
         if (length > 0) {
             knockbackVelocityX = (damageX / length) * force;
             knockbackVelocityY = (damageY / length) * force;
         }
         
-        // Thiết lập thời gian đẩy lùi
+        // Set knockback duration
         knockbackDuration = WeaponConfig::Shotgun::KNOCKBACK_DURATION;
     }
 
-    // Áp dụng sát thương phù hợp dựa trên loại vũ khí
+    // Apply appropriate damage based on weapon type
     if (isShotgunPellet) {
         health -= WeaponConfig::Shotgun::PELLET_DAMAGE;
     } else if (bullet && bullet->GetBulletType() == BulletType::RIFLE) {
@@ -485,7 +484,7 @@ void Zombie::Reset(float newX, float newY, float speedMultiplier) {
     knockbackVelocityY = 0.0f;
     knockbackDuration = 0.0f;
     
-    // Đặt lại vị trí hitbox
+    // Reset hitbox position
     hitbox.x = static_cast<int>(x - hitbox.w / 2);
     hitbox.y = static_cast<int>(y - hitbox.h / 2);
 }

@@ -54,3 +54,8 @@ SDL_FPoint Camera::WorldToScreen(float worldX, float worldY) const {
 SDL_FPoint Camera::ScreenToWorld(float screenX, float screenY) const {
     return {screenX + x, screenY + y};
 }
+
+void Camera::SetViewDimensions(int width, int height) {
+    viewWidth = width;
+    viewHeight = height;
+}

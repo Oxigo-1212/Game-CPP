@@ -6,15 +6,25 @@
 #include "Player.h"
 #include "UI.h"
 #include "TileMap.h"
-#include "Camera.h" // Added Camera include
-#include "ChunkManager.h" // Added ChunkManager include
-#include "Zombie.h" // Added Zombie include
+#include "Camera.h"
+#include "ChunkManager.h"
+#include "Zombie.h"
+#include "ZombiePool.h"
+#include "WaveManager.h"
+#include "LoadingScreen.h"
+#include "GameState.h"
+#include "MainMenu.h"
+#include "Constants.h"
 
 class Game {
 private:
     bool isRunning;
     SDL_Window* window;
     SDL_Renderer* renderer;
+    
+    // Game state
+    GameState currentState;
+    MainMenu* mainMenu;
     
     // Timing variables
     const int FPS;
@@ -31,17 +41,18 @@ private:
     float waveDelay;
     float waveTimer;
     bool waveInProgress;
+    WaveManager* waveManager;  // Added WaveManager pointer
 
     // Game objects
     Player* player;
-    UI* ui;
-    Camera* camera; // Added camera member
+    UI* ui;    Camera* camera; // Added camera member
     ChunkManager* chunkManager; // Added ChunkManager member
+    ZombiePool* zombiePool; // Added ZombiePool member
     std::vector<Zombie*> zombies; // Added zombies container
+    std::unique_ptr<LoadingScreen> loadingScreen; // Added LoadingScreen member
 
-    // Screen dimensions - consider moving to a Constants.h or config file
-    static constexpr int SCREEN_WIDTH = 1280;
-    static constexpr int SCREEN_HEIGHT = 720;
+    // Game constants
+    static constexpr int ZOMBIE_POOL_SIZE = 250; // Size of zombie pool
 
     // Wave constants
     static constexpr float INITIAL_SPAWN_DELAY = 2.0f; // Time between zombie spawns in seconds
@@ -67,4 +78,8 @@ private:
     void SpawnZombie();
     void UpdateWaveState(float deltaTime);
     SDL_Point GetRandomSpawnPosition() const;
+    void InitializeGameState();  // Added declaration
+    void CleanupGameState();     // Added declaration
+    void UpdateWindowSize(int width, int height); // Method to update window dimensions
+    void ToggleFullscreen(); // Method to toggle between fullscreen and windowed mode
 };

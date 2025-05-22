@@ -3,8 +3,8 @@
 #include <cmath>
 #include <iostream>
 
-Bullet::Bullet(SDL_Renderer* renderer, float startX, float startY, float angle)
-    : x(startX), y(startY), rotation(angle), active(true), texture(nullptr),
+Bullet::Bullet(SDL_Renderer* renderer, float startX, float startY, float angle, BulletType bulletType)
+    : x(startX), y(startY), rotation(angle), active(true), texture(nullptr), type(bulletType),
       startX(startX), startY(startY), distanceTraveled(0.0f) { // Initialize new members
     
     // Convert angle to radians

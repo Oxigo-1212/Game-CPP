@@ -6,17 +6,17 @@
 
 ZombiePool::ZombiePool(SDL_Renderer* renderer, size_t poolSize) 
     : renderer(renderer) {
-    // Đặt trước không gian cho các vector
+    // Reserve space for our vectors
     pool.reserve(poolSize);
     activeZombies.reserve(poolSize);
     isInUse.reserve(poolSize);
 }
 
 void ZombiePool::AddZombie() {
-    // Tạo zombie ban đầu ở ngoài màn hình
+    // Create zombie off-screen initially
     Zombie* zombie = new Zombie(renderer, -1000.0f, -1000.0f);
     pool.push_back(zombie);
-    isInUse.push_back(false);  // Đánh dấu là chưa sử dụng ban đầu
+    isInUse.push_back(false);  // Mark as not in use initially
 }
 
 ZombiePool::~ZombiePool() {
@@ -26,13 +26,14 @@ ZombiePool::~ZombiePool() {
         }
         pool.clear();
         activeZombies.clear();
-        isInUse.clear();    } catch (...) {
-        std::cerr << "ZombiePool: Lỗi trong quá trình dọn dẹp" << std::endl;
+        isInUse.clear();
+    } catch (...) {
+        std::cerr << "ZombiePool: Error during cleanup" << std::endl;
     }
 }
 
 Zombie* ZombiePool::GetZombie() {
-    // Đầu tiên kiểm tra các zombie tái sử dụng
+    // First check recycled zombies
     if (!recycledZombies.empty()) {
         Zombie* zombie = recycledZombies.front();
         recycledZombies.pop();
@@ -40,41 +41,41 @@ Zombie* ZombiePool::GetZombie() {
         return zombie;
     }
 
-    // Nếu không có zombie tái sử dụng, lấy một zombie từ pool
+    // If no recycled zombies, get one from the pool
     try {
         for (size_t i = 0; i < pool.size(); ++i) {
             if (!isInUse[i] && pool[i] != nullptr) {
                 isInUse[i] = true;
                 activeZombies.push_back(pool[i]);
                 
-                // Ghi log thống kê sử dụng pool
+                // Log pool usage stats
                 size_t activeCount = std::count(isInUse.begin(), isInUse.end(), true);
                 if (activeCount > pool.size() * 0.8f) {
-                    std::cout << "ZombiePool: Cảnh báo sử dụng cao - " << activeCount << "/" 
-                              << pool.size() << " zombie đang hoạt động" << std::endl;
-                    // Kích hoạt tái sử dụng tích cực khi pool gần đầy
+                    std::cout << "ZombiePool: High usage warning - " << activeCount << "/" 
+                              << pool.size() << " zombies active" << std::endl;
+                    // Trigger aggressive recycling when pool is nearly full
                     return pool[i];
                 }
                 
                 return pool[i];
             }
         }
-        std::cerr << "ZombiePool: Không có zombie khả dụng trong pool" << std::endl;
+        std::cerr << "ZombiePool: No available zombies in pool" << std::endl;
         return nullptr;
     } catch (const std::exception& e) {
-        std::cerr << "ZombiePool: Lỗi trong GetZombie: " << e.what() << std::endl;
+        std::cerr << "ZombiePool: Error in GetZombie: " << e.what() << std::endl;
         return nullptr;
     }
 }
 
 void ZombiePool::ReturnZombie(Zombie* zombie) {
     if (!zombie) {
-        std::cerr << "ZombiePool: Cố gắng trả về zombie null" << std::endl;
+        std::cerr << "ZombiePool: Attempted to return null zombie" << std::endl;
         return;
     }
 
     try {
-        // Tìm và đánh dấu zombie là không sử dụng
+        // Find and mark the zombie as not in use
         bool found = false;
         for (size_t i = 0; i < pool.size(); ++i) {
             if (pool[i] == zombie) {
@@ -85,60 +86,60 @@ void ZombiePool::ReturnZombie(Zombie* zombie) {
         }
 
         if (!found) {
-            std::cerr << "ZombiePool: Cố gắng trả về zombie không thuộc pool này" << std::endl;
+            std::cerr << "ZombiePool: Attempted to return zombie not from this pool" << std::endl;
             return;
         }
 
-        // Xóa khỏi danh sách zombie đang hoạt động sử dụng erase-remove idiom
+        // Remove from active zombies using the erase-remove idiom
         activeZombies.erase(
             std::remove(activeZombies.begin(), activeZombies.end(), zombie),
             activeZombies.end()
         );
 
     } catch (const std::exception& e) {
-        std::cerr << "ZombiePool: Lỗi trong ReturnZombie: " << e.what() << std::endl;
+        std::cerr << "ZombiePool: Error in ReturnZombie: " << e.what() << std::endl;
     }
 }
 
 void ZombiePool::Update(float deltaTime, Player* player) {
     if (!player) {
-        std::cerr << "ZombiePool: Player null trong Update" << std::endl;
+        std::cerr << "ZombiePool: Null player in Update" << std::endl;
         return;
     }
 
     try {
-        // Cập nhật khoảng cách zombie và tái sử dụng nếu cần
+        // Update zombie distances and recycle if needed
         UpdateZombieDistances(player);
         
-        // Sao chép để tránh sửa đổi trong quá trình lặp
+        // Copy to prevent modification during iteration
         std::vector<Zombie*> currentActive = activeZombies;
         
         for (Zombie* zombie : currentActive) {
             if (zombie && !zombie->IsDead()) {
                 zombie->Update(deltaTime, player, currentActive);
                 
-                // Nếu zombie chết hoặc quá xa, tái sử dụng nó
+                // If zombie died or is too far, recycle it
                 if (zombie->IsDead() || IsZombieTooFar(zombie, player, RECYCLE_DISTANCE)) {
                     ReturnZombie(zombie);
                 }
             }
         }
 
-        // Tối ưu hóa phân bố zombie định kỳ
+        // Optimize zombie distribution periodically
         static float optimizeTimer = 0.0f;
         optimizeTimer += deltaTime;
-        if (optimizeTimer >= 1.0f) {  // Tối ưu hóa mỗi giây
+        if (optimizeTimer >= 1.0f) {  // Optimize every second
             OptimizeZombieDistribution(player);
             optimizeTimer = 0.0f;
         }
     } catch (const std::exception& e) {
-        std::cerr << "ZombiePool: Lỗi trong Update: " << e.what() << std::endl;
+        std::cerr << "ZombiePool: Error in Update: " << e.what() << std::endl;
     }
 }
 
 void ZombiePool::Render(SDL_Renderer* renderer, Camera* camera) {
     if (!renderer || !camera) {
-        std::cerr << "ZombiePool: Renderer hoặc camera null trong Render" << std::endl;
+        std::cerr << "ZombiePool: Null renderer or camera in Render" << std::endl;
         return;
     }
 
@@ -149,7 +150,7 @@ void ZombiePool::Render(SDL_Renderer* renderer, Camera* camera) {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "ZombiePool: Lỗi trong Render: " << e.what() << std::endl;
+        std::cerr << "ZombiePool: Error in Render: " << e.what() << std::endl;
     }
 }
 
@@ -171,12 +172,12 @@ void ZombiePool::RecycleDistantZombies(Player* player, float maxDistance) {
 void ZombiePool::OptimizeZombieDistribution(Player* player) {
     size_t activeCount = activeZombies.size();
     
-    // Nếu chúng ta đang sử dụng quá nhiều zombie, tái sử dụng các zombie ở xa
+    // If we're using too many zombies, recycle distant ones
     if (activeCount > pool.size() * 0.8f) {
         RecycleDistantZombies(player, MIN_RECYCLE_DISTANCE);
     }
     
-    // Đảm bảo zombie được phân bố tốt xung quanh người chơi
+    // Ensure zombies are well-distributed around the player
     std::vector<Zombie*> poorlyPlaced;
     for (Zombie* zombie : activeZombies) {
         if (IsZombieTooFar(zombie, player, OPTIMAL_DISTANCE)) {
@@ -184,7 +185,7 @@ void ZombiePool::OptimizeZombieDistribution(Player* player) {
         }
     }
     
-    // Định vị lại các zombie bị đặt không tốt
+    // Reposition poorly placed zombies
     for (Zombie* zombie : poorlyPlaced) {
         SDL_Point newPos = GetOptimalSpawnPosition(player);
         zombie->Reset(static_cast<float>(newPos.x), static_cast<float>(newPos.y));
@@ -202,12 +203,12 @@ bool ZombiePool::IsZombieTooFar(const Zombie* zombie, const Player* player, floa
 }
 
 void ZombiePool::UpdateZombieDistances(Player* player) {
-    // Tái sử dụng các zombie quá xa người chơi
+    // Recycle zombies that are too far from the player
     RecycleDistantZombies(player, RECYCLE_DISTANCE);
 }
 
 SDL_Point ZombiePool::GetOptimalSpawnPosition(Player* player) const {
-    // Tạo vị trí ở khoảng cách tối ưu từ người chơi
+    // Generate a position at optimal distance from player
     float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * M_PI;
     float distance = OPTIMAL_DISTANCE * (0.8f + 0.4f * static_cast<float>(rand()) / RAND_MAX);
     
@@ -219,7 +220,7 @@ SDL_Point ZombiePool::GetOptimalSpawnPosition(Player* player) const {
 }
 
 void ZombiePool::PrewarmPool() {
-    // Tạo một số zombie ban đầu để tránh giật khi lần đầu sinh ra
+    // Create some initial zombies to prevent stutter when first spawning
     for (size_t i = 0; i < pool.size() / 4; ++i) {
         Zombie* zombie = GetZombie();
         if (zombie) {
