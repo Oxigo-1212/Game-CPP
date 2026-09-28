@@ -26,6 +26,9 @@ Zombie::~Zombie() {
     for (SDL_Texture* tex : attackFrames) {
         if (tex) SDL_DestroyTexture(tex);
     }
+
+    //dummy
+    
 }
 
 void Zombie::LoadTextures() {
